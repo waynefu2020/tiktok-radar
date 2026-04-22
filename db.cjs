@@ -36,6 +36,8 @@ db.exec(`
     transcript_status TEXT NOT NULL DEFAULT 'pending',
     breakdown_json TEXT NOT NULL DEFAULT '',
     ai_status TEXT NOT NULL DEFAULT 'pending',
+    analysis_source TEXT NOT NULL DEFAULT 'transcript',
+    inferred_from TEXT NOT NULL DEFAULT '',
     updated_at TEXT NOT NULL
   );
 
@@ -51,6 +53,8 @@ for (const column of [
   ["transcript_status", "TEXT NOT NULL DEFAULT 'pending'"],
   ["breakdown_json", "TEXT NOT NULL DEFAULT ''"],
   ["ai_status", "TEXT NOT NULL DEFAULT 'pending'"],
+  ["analysis_source", "TEXT NOT NULL DEFAULT 'transcript'"],
+  ["inferred_from", "TEXT NOT NULL DEFAULT ''"],
 ]) {
   try {
     db.exec(`ALTER TABLE video_scripts ADD COLUMN ${column[0]} ${column[1]}`)
@@ -82,7 +86,7 @@ function sortVideosByNewest(videos) {
 
 function applyScript(video) {
   const script = db
-    .prepare('SELECT script, hook_type, transcript_text, transcript_status, breakdown_json, ai_status FROM video_scripts WHERE video_id = ?')
+    .prepare('SELECT script, hook_type, transcript_text, transcript_status, breakdown_json, ai_status, analysis_source, inferred_from FROM video_scripts WHERE video_id = ?')
     .get(video.id)
   if (!script) return video
   return {
@@ -93,6 +97,8 @@ function applyScript(video) {
     transcriptStatus: script.transcript_status || 'pending',
     breakdown: parseJson(script.breakdown_json, null),
     aiStatus: script.ai_status || 'pending',
+    analysisSource: script.analysis_source || 'transcript',
+    inferredFrom: script.inferred_from || '',
   }
 }
 
@@ -142,10 +148,10 @@ function getVideos() {
 }
 
 function getVideoScripts() {
-  return db.prepare('SELECT video_id, script, hook_type, transcript_text, transcript_status, breakdown_json, ai_status, updated_at FROM video_scripts').all()
+  return db.prepare('SELECT video_id, script, hook_type, transcript_text, transcript_status, breakdown_json, ai_status, analysis_source, inferred_from, updated_at FROM video_scripts').all()
 }
 
-function saveVideoScript(videoId, { script = '', hookType = null, transcriptText, transcriptStatus, breakdown, aiStatus }) {
+function saveVideoScript(videoId, { script = '', hookType = null, transcriptText, transcriptStatus, breakdown, aiStatus, analysisSource, inferredFrom }) {
   const existing = db.prepare('SELECT * FROM video_scripts WHERE video_id = ?').get(videoId)
   const updatedAt = nowIso()
   const nextScript = script ?? existing?.script ?? ''
@@ -156,9 +162,11 @@ function saveVideoScript(videoId, { script = '', hookType = null, transcriptText
     ? JSON.stringify(breakdown)
     : existing?.breakdown_json ?? ''
   const nextAiStatus = aiStatus ?? existing?.ai_status ?? 'pending'
+  const nextAnalysisSource = analysisSource ?? existing?.analysis_source ?? 'transcript'
+  const nextInferredFrom = inferredFrom ?? existing?.inferred_from ?? ''
   db.prepare(`
-    INSERT INTO video_scripts (video_id, script, hook_type, transcript_text, transcript_status, breakdown_json, ai_status, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO video_scripts (video_id, script, hook_type, transcript_text, transcript_status, breakdown_json, ai_status, analysis_source, inferred_from, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(video_id) DO UPDATE SET
       script = excluded.script,
       hook_type = excluded.hook_type,
@@ -166,6 +174,8 @@ function saveVideoScript(videoId, { script = '', hookType = null, transcriptText
       transcript_status = excluded.transcript_status,
       breakdown_json = excluded.breakdown_json,
       ai_status = excluded.ai_status,
+      analysis_source = excluded.analysis_source,
+      inferred_from = excluded.inferred_from,
       updated_at = excluded.updated_at
   `).run(
     videoId,
@@ -175,6 +185,8 @@ function saveVideoScript(videoId, { script = '', hookType = null, transcriptText
     nextTranscriptStatus,
     nextBreakdownJson,
     nextAiStatus,
+    nextAnalysisSource,
+    nextInferredFrom,
     updatedAt,
   )
   return {
@@ -185,6 +197,8 @@ function saveVideoScript(videoId, { script = '', hookType = null, transcriptText
     transcriptStatus: nextTranscriptStatus,
     breakdown: parseJson(nextBreakdownJson, null),
     aiStatus: nextAiStatus,
+    analysisSource: nextAnalysisSource,
+    inferredFrom: nextInferredFrom,
     updatedAt,
   }
 }

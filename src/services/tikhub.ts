@@ -12,6 +12,8 @@ export interface VideoScriptDraft {
   transcriptStatus?: Video['transcriptStatus']
   breakdown?: ScriptBreakdown | null
   aiStatus?: Video['aiStatus']
+  analysisSource?: Video['analysisSource']
+  inferredFrom?: string
 }
 
 export interface SyncResult {
@@ -121,6 +123,8 @@ export async function applySavedScripts(videos: Video[]): Promise<Video[]> {
       transcriptStatus: draft.transcriptStatus,
       breakdown: draft.breakdown,
       aiStatus: draft.aiStatus,
+      analysisSource: draft.analysisSource,
+      inferredFrom: draft.inferredFrom,
     }
   })
 }

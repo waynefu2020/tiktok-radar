@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Heart, MessageCircle, Bookmark, Share2, ExternalLink, FileText, ChevronUp, Copy, RefreshCw, CheckCircle2, AlertCircle, Loader2, Database } from 'lucide-react'
+import { Heart, MessageCircle, Bookmark, Share2, ExternalLink, FileText, ChevronUp, Copy, RefreshCw, CheckCircle2, AlertCircle, Loader2, Database, Sparkles } from 'lucide-react'
 import TopBar from '../components/TopBar'
 import StatCard, { fmt } from '../components/StatCard'
 import AppBadge from '../components/AppBadge'
@@ -22,36 +22,49 @@ function inRange(dateText: string, start: Date, end: Date) {
   return Number.isFinite(time) && time >= start.getTime() && time < end.getTime()
 }
 
-function BreakdownView({ breakdown }: { breakdown: ScriptBreakdown }) {
+function BreakdownView({ breakdown, source, inferredFrom }: { breakdown: ScriptBreakdown; source?: string; inferredFrom?: string }) {
+  const isInferred = source === 'inferred'
   return (
-    <div className="grid grid-cols-2 gap-3 text-xs">
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-        <div className="text-[#8A8FA8] mb-1">开场钩子</div>
-        <div className="text-[#C8CBE0] leading-relaxed">{breakdown.hook}</div>
-      </div>
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-        <div className="text-[#8A8FA8] mb-1">痛点</div>
-        <div className="text-[#C8CBE0] leading-relaxed">{breakdown.painPoint}</div>
-      </div>
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-        <div className="text-[#8A8FA8] mb-1">产品植入</div>
-        <div className="text-[#C8CBE0] leading-relaxed">{breakdown.productPlacement}</div>
-      </div>
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-        <div className="text-[#8A8FA8] mb-1">CTA</div>
-        <div className="text-[#C8CBE0] leading-relaxed">{breakdown.cta}</div>
-      </div>
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3 col-span-2">
-        <div className="text-[#8A8FA8] mb-2">内容结构</div>
-        <ol className="space-y-1 text-[#C8CBE0] list-decimal list-inside">
-          {breakdown.structure.map((item, idx) => <li key={idx}>{item}</li>)}
-        </ol>
-      </div>
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3 col-span-2">
-        <div className="text-[#8A8FA8] mb-2">可复用拍摄建议</div>
-        <ul className="space-y-1 text-[#C8CBE0] list-disc list-inside">
-          {breakdown.reusableIdeas.map((item, idx) => <li key={idx}>{item}</li>)}
-        </ul>
+    <div className="space-y-3">
+      {isInferred && (
+        <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+          <Sparkles size={14} className="text-amber-400 mt-0.5 shrink-0" />
+          <div className="text-xs text-amber-200/80 leading-relaxed">
+            <span className="font-medium text-amber-300">基于有限信息推测拆解</span>
+            <span className="mx-1">·</span>
+            未获取到视频真实字幕，以下分析由 AI 根据标题、标签和互动数据推测生成，仅供参考。
+          </div>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
+          <div className="text-[#8A8FA8] mb-1">开场钩子</div>
+          <div className="text-[#C8CBE0] leading-relaxed">{breakdown.hook}</div>
+        </div>
+        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
+          <div className="text-[#8A8FA8] mb-1">痛点</div>
+          <div className="text-[#C8CBE0] leading-relaxed">{breakdown.painPoint}</div>
+        </div>
+        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
+          <div className="text-[#8A8FA8] mb-1">产品植入</div>
+          <div className="text-[#C8CBE0] leading-relaxed">{breakdown.productPlacement}</div>
+        </div>
+        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
+          <div className="text-[#8A8FA8] mb-1">CTA</div>
+          <div className="text-[#C8CBE0] leading-relaxed">{breakdown.cta}</div>
+        </div>
+        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3 col-span-2">
+          <div className="text-[#8A8FA8] mb-2">内容结构</div>
+          <ol className="space-y-1 text-[#C8CBE0] list-decimal list-inside">
+            {breakdown.structure.map((item, idx) => <li key={idx}>{item}</li>)}
+          </ol>
+        </div>
+        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3 col-span-2">
+          <div className="text-[#8A8FA8] mb-2">可复用拍摄建议</div>
+          <ul className="space-y-1 text-[#C8CBE0] list-disc list-inside">
+            {breakdown.reusableIdeas.map((item, idx) => <li key={idx}>{item}</li>)}
+          </ul>
+        </div>
       </div>
     </div>
   )
@@ -164,30 +177,39 @@ function VideoRow({ video }: { video: Video }) {
                 </div>
               ) : scriptError ? (
                 <div className="text-sm text-red-400">{scriptError}</div>
-              ) : scriptVideo.transcriptStatus === 'no_transcript' ? (
+              ) : !scriptVideo.breakdown && scriptVideo.transcriptStatus === 'no_transcript' ? (
                 <div className="text-sm text-[#8A8FA8]">未获取到这条视频的真实字幕/转写，暂不生成 AI 拆解。</div>
               ) : (
                 <div className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-xs text-[#8A8FA8] font-medium">脚本原文 / 真实字幕</div>
-                      {scriptVideo.transcriptText && (
+                  {scriptVideo.transcriptText && (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs text-[#8A8FA8] font-medium">脚本原文 / 真实字幕</div>
                         <button
                           onClick={() => navigator.clipboard.writeText(scriptVideo.transcriptText || '')}
                           className="flex items-center gap-1.5 text-xs text-[#6366F1] hover:text-[#818CF8] transition-colors"
                         >
                           <Copy size={11} /> 复制原文
                         </button>
+                      </div>
+                      <pre className="text-xs text-[#C8CBE0] whitespace-pre-wrap leading-relaxed font-sans bg-[rgb(18,20,28)] border border-[#2E3045] rounded-lg p-3 max-h-52 overflow-auto">
+                        {scriptVideo.transcriptText}
+                      </pre>
+                    </div>
+                  )}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs text-[#8A8FA8] font-medium">AI 拆解</div>
+                      {scriptVideo.analysisSource === 'inferred' && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">推测</span>
                       )}
                     </div>
-                    <pre className="text-xs text-[#C8CBE0] whitespace-pre-wrap leading-relaxed font-sans bg-[rgb(18,20,28)] border border-[#2E3045] rounded-lg p-3 max-h-52 overflow-auto">
-                      {scriptVideo.transcriptText || '暂无脚本原文'}
-                    </pre>
-                  </div>
-                  <div>
-                    <div className="text-xs text-[#8A8FA8] font-medium mb-2">AI 拆解</div>
                     {scriptVideo.breakdown ? (
-                      <BreakdownView breakdown={scriptVideo.breakdown} />
+                      <BreakdownView
+                        breakdown={scriptVideo.breakdown}
+                        source={scriptVideo.analysisSource}
+                        inferredFrom={scriptVideo.inferredFrom}
+                      />
                     ) : (
                       <div className="text-sm text-[#8A8FA8]">暂无 AI 拆解</div>
                     )}

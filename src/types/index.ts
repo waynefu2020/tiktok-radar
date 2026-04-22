@@ -30,6 +30,8 @@ export interface Video {
   transcriptStatus?: 'pending' | 'ready' | 'no_transcript' | 'error'
   breakdown?: ScriptBreakdown | null
   aiStatus?: 'pending' | 'ready' | 'error' | 'skipped'
+  analysisSource?: 'transcript' | 'inferred' | 'asr'
+  inferredFrom?: string
   views?: number
 }
 

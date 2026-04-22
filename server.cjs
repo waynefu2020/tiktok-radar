@@ -262,21 +262,22 @@ function parseAiJson(content) {
   }
 }
 
+const BREAKDOWN_SCHEMA = {
+  type: 'object',
+  properties: {
+    hook: { type: 'string' },
+    painPoint: { type: 'string' },
+    structure: { type: 'array', items: { type: 'string' } },
+    productPlacement: { type: 'string' },
+    cta: { type: 'string' },
+    reusableIdeas: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['hook', 'painPoint', 'structure', 'productPlacement', 'cta', 'reusableIdeas'],
+  additionalProperties: false,
+}
+
 async function generateBreakdown(video, transcript) {
   if (!AI_API_KEY) throw new Error('Missing AI_API_KEY')
-  const schema = {
-    type: 'object',
-    properties: {
-      hook: { type: 'string' },
-      painPoint: { type: 'string' },
-      structure: { type: 'array', items: { type: 'string' } },
-      productPlacement: { type: 'string' },
-      cta: { type: 'string' },
-      reusableIdeas: { type: 'array', items: { type: 'string' } },
-    },
-    required: ['hook', 'painPoint', 'structure', 'productPlacement', 'cta', 'reusableIdeas'],
-    additionalProperties: false,
-  }
   const resp = await aiClient.post('/chat/completions', {
     model: AI_MODEL,
     messages: [
@@ -288,7 +289,7 @@ async function generateBreakdown(video, transcript) {
         role: 'user',
         content: JSON.stringify({
           instruction: '基于真实字幕拆解这条TikTok UGC视频，输出中文分析。不要编造字幕以外的信息。',
-          expectedSchema: schema,
+          expectedSchema: BREAKDOWN_SCHEMA,
           video: {
             title: video.title,
             app: video.app,
@@ -307,6 +308,51 @@ async function generateBreakdown(video, transcript) {
   })
   const content = resp.data?.choices?.[0]?.message?.content
   return parseAiJson(content)
+}
+
+async function generateInferredBreakdown(video) {
+  if (!AI_API_KEY) throw new Error('Missing AI_API_KEY')
+  const inferredFrom = JSON.stringify({
+    title: video.title,
+    tags: video.tags,
+    app: video.app,
+    likes: video.likes,
+    comments: video.comments,
+    saves: video.saves,
+    shares: video.shares,
+    creator: video.creator?.username,
+    publishedAt: video.publishedAt,
+  })
+  const resp = await aiClient.post('/chat/completions', {
+    model: AI_MODEL,
+    messages: [
+      {
+        role: 'system',
+        content: '你是短视频投放与UGC脚本分析专家。只输出JSON，必须符合用户给定结构。',
+      },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          instruction: '这条TikTok UGC视频没有字幕/转写文本。请基于视频标题、标签、互动数据和竞品上下文，进行推测性拆解。输出中文分析。明确标注这是推测，但只要合理推断即可。',
+          expectedSchema: BREAKDOWN_SCHEMA,
+          video: {
+            title: video.title,
+            app: video.app,
+            tags: video.tags,
+            likes: video.likes,
+            comments: video.comments,
+            saves: video.saves,
+            shares: video.shares,
+          },
+          note: '没有真实字幕，请基于标题、标签和竞品App的UGC投放惯例进行合理推测。',
+        }),
+      },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.4,
+  })
+  const content = resp.data?.choices?.[0]?.message?.content
+  return { breakdown: parseAiJson(content), inferredFrom }
 }
 
 // 获取指定 TikTok 达人资料
@@ -371,16 +417,22 @@ app.post('/api/videos/:videoId/analyze-script', async (req, res) => {
     }
 
     if (!transcript) {
+      // 第2层：无字幕时走推测拆解
+      const inferred = video.breakdown
+        ? { breakdown: video.breakdown, inferredFrom: video.inferredFrom || '' }
+        : await generateInferredBreakdown(video)
       const saved = saveVideoScript(video.id, {
         script: video.script || '',
         hookType: video.hookType || null,
         transcriptText: '',
         transcriptStatus: 'no_transcript',
-        breakdown: null,
-        aiStatus: 'skipped',
+        breakdown: inferred.breakdown,
+        aiStatus: 'ready',
+        analysisSource: 'inferred',
+        inferredFrom: inferred.inferredFrom,
       })
       return res.json({
-        video: { ...video, ...saved, transcriptText: '', transcriptStatus: 'no_transcript', breakdown: null, aiStatus: 'skipped' },
+        video: { ...video, ...saved, transcriptText: '', transcriptStatus: 'no_transcript', breakdown: inferred.breakdown, aiStatus: 'ready', analysisSource: 'inferred', inferredFrom: inferred.inferredFrom },
       })
     }
 
@@ -392,6 +444,8 @@ app.post('/api/videos/:videoId/analyze-script', async (req, res) => {
       transcriptStatus: 'ready',
       breakdown,
       aiStatus: 'ready',
+      analysisSource: 'transcript',
+      inferredFrom: '',
     })
     res.json({
       video: {
@@ -401,6 +455,8 @@ app.post('/api/videos/:videoId/analyze-script', async (req, res) => {
         transcriptStatus: 'ready',
         breakdown,
         aiStatus: 'ready',
+        analysisSource: 'transcript',
+        inferredFrom: '',
       },
     })
   } catch (err) {
@@ -412,6 +468,8 @@ app.post('/api/videos/:videoId/analyze-script', async (req, res) => {
       transcriptStatus: existingTranscript ? 'ready' : 'error',
       breakdown: video.breakdown || null,
       aiStatus: 'error',
+      analysisSource: video.analysisSource || 'transcript',
+      inferredFrom: video.inferredFrom || '',
     })
     res.status(500).json({
       error: err.message || 'Analyze script failed',
