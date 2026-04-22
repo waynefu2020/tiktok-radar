@@ -79,7 +79,7 @@ function VideoRow({ video }: { video: Video }) {
   const handleToggleScript = async () => {
     const nextExpanded = !expanded
     setExpanded(nextExpanded)
-    if (!nextExpanded || scriptVideo.transcriptStatus === 'ready' || scriptVideo.transcriptStatus === 'no_transcript' || loadingScript) return
+    if (!nextExpanded || scriptVideo.transcriptStatus === 'ready' || (scriptVideo.transcriptStatus === 'no_transcript' && scriptVideo.breakdown) || loadingScript) return
 
     setLoadingScript(true)
     setScriptError('')
