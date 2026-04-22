@@ -6,7 +6,7 @@ export interface VideoCache {
 }
 
 export interface VideoScriptDraft {
-  script: string
+  script?: string
   hookType?: Video['hookType']
   transcriptText?: string
   transcriptStatus?: Video['transcriptStatus']
