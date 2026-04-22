@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0A0C10;
+    color: #C8CBE0;
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2E3045;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3E4155;
+  }
+}
+
+@layer components {
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-[10px] text-sm font-medium text-[#8A8FA8] cursor-pointer transition-all duration-150 hover:bg-[rgba(99,102,241,0.08)] hover:text-[#C8CBE0];
+  }
+  .nav-item.active {
+    @apply bg-[rgba(99,102,241,0.12)] text-white;
+  }
+
+  .stat-card {
+    @apply rounded-xl border border-[#2E3045] bg-[rgb(18,20,28)] p-5 flex flex-col gap-2;
+  }
+
+  .filter-btn {
+    @apply px-3 py-1.5 rounded-lg text-xs font-medium border border-[#2E3045] text-[#8A8FA8] cursor-pointer transition-all duration-150 hover:border-[#6366F1]/40 hover:text-[#C8CBE0];
+  }
+  .filter-btn.active {
+    @apply border-[#6366F1]/50 bg-[rgba(99,102,241,0.1)] text-white;
+  }
+
+  .tag-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs bg-[rgb(42,45,62)] text-[#8A8FA8];
+  }
+
+  .gradient-bg {
+    background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  }
+
+  .table-row {
+    @apply border-b border-[#2E3045]/60 hover:bg-[rgb(18,20,28)] transition-colors duration-100;
+  }
+
+  .metric-val {
+    @apply text-sm font-medium text-[#C8CBE0] tabular-nums;
+  }
+}

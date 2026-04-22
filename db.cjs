@@ -1,0 +1,256 @@
+const fs = require('fs')
+const path = require('path')
+const { DatabaseSync } = require('node:sqlite')
+
+const DATA_DIR = path.join(__dirname, 'data')
+const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, 'tiktok-radar.db')
+
+fs.mkdirSync(DATA_DIR, { recursive: true })
+
+const db = new DatabaseSync(DB_PATH)
+db.exec('PRAGMA journal_mode = WAL')
+db.exec('PRAGMA foreign_keys = ON')
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS videos (
+    id TEXT PRIMARY KEY,
+    app TEXT NOT NULL,
+    published_at TEXT NOT NULL,
+    likes INTEGER NOT NULL DEFAULT 0,
+    payload TEXT NOT NULL,
+    synced_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS monitored_creators (
+    username TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    apps TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS video_scripts (
+    video_id TEXT PRIMARY KEY,
+    script TEXT NOT NULL DEFAULT '',
+    hook_type TEXT,
+    transcript_text TEXT NOT NULL DEFAULT '',
+    transcript_status TEXT NOT NULL DEFAULT 'pending',
+    breakdown_json TEXT NOT NULL DEFAULT '',
+    ai_status TEXT NOT NULL DEFAULT 'pending',
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS sync_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+`)
+
+for (const column of [
+  ["transcript_text", "TEXT NOT NULL DEFAULT ''"],
+  ["transcript_status", "TEXT NOT NULL DEFAULT 'pending'"],
+  ["breakdown_json", "TEXT NOT NULL DEFAULT ''"],
+  ["ai_status", "TEXT NOT NULL DEFAULT 'pending'"],
+]) {
+  try {
+    db.exec(`ALTER TABLE video_scripts ADD COLUMN ${column[0]} ${column[1]}`)
+  } catch (err) {
+    if (!String(err.message || '').includes('duplicate column')) throw err
+  }
+}
+
+function nowIso() {
+  return new Date().toISOString()
+}
+
+function parseJson(value, fallback) {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
+}
+
+function videoTime(video) {
+  const time = new Date(video.publishedAt).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+function sortVideosByNewest(videos) {
+  return videos.sort((a, b) => videoTime(b) - videoTime(a))
+}
+
+function applyScript(video) {
+  const script = db
+    .prepare('SELECT script, hook_type, transcript_text, transcript_status, breakdown_json, ai_status FROM video_scripts WHERE video_id = ?')
+    .get(video.id)
+  if (!script) return video
+  return {
+    ...video,
+    script: script.script || '',
+    hookType: script.hook_type || null,
+    transcriptText: script.transcript_text || '',
+    transcriptStatus: script.transcript_status || 'pending',
+    breakdown: parseJson(script.breakdown_json, null),
+    aiStatus: script.ai_status || 'pending',
+  }
+}
+
+function upsertVideos(videos) {
+  const stmt = db.prepare(`
+    INSERT INTO videos (id, app, published_at, likes, payload, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      app = excluded.app,
+      published_at = excluded.published_at,
+      likes = excluded.likes,
+      payload = excluded.payload,
+      synced_at = excluded.synced_at
+  `)
+  const syncedAt = nowIso()
+  db.exec('BEGIN')
+  try {
+    for (const video of videos) {
+      stmt.run(
+        video.id,
+        video.app,
+        video.publishedAt || '',
+        video.likes || 0,
+        JSON.stringify(video),
+        syncedAt,
+      )
+    }
+    db.exec('COMMIT')
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+  setMeta('last_sync_at', syncedAt)
+  return syncedAt
+}
+
+function replaceAppVideos(appId, videos) {
+  db.prepare('DELETE FROM videos WHERE app = ?').run(appId)
+  upsertVideos(videos)
+}
+
+function getVideos() {
+  const rows = db
+    .prepare('SELECT payload FROM videos ORDER BY published_at DESC, likes DESC')
+    .all()
+  return sortVideosByNewest(rows.map(row => applyScript(parseJson(row.payload, null))).filter(Boolean))
+}
+
+function getVideoScripts() {
+  return db.prepare('SELECT video_id, script, hook_type, transcript_text, transcript_status, breakdown_json, ai_status, updated_at FROM video_scripts').all()
+}
+
+function saveVideoScript(videoId, { script = '', hookType = null, transcriptText, transcriptStatus, breakdown, aiStatus }) {
+  const existing = db.prepare('SELECT * FROM video_scripts WHERE video_id = ?').get(videoId)
+  const updatedAt = nowIso()
+  const nextScript = script ?? existing?.script ?? ''
+  const nextHookType = hookType ?? existing?.hook_type ?? null
+  const nextTranscriptText = transcriptText ?? existing?.transcript_text ?? ''
+  const nextTranscriptStatus = transcriptStatus ?? existing?.transcript_status ?? 'pending'
+  const nextBreakdownJson = breakdown !== undefined
+    ? JSON.stringify(breakdown)
+    : existing?.breakdown_json ?? ''
+  const nextAiStatus = aiStatus ?? existing?.ai_status ?? 'pending'
+  db.prepare(`
+    INSERT INTO video_scripts (video_id, script, hook_type, transcript_text, transcript_status, breakdown_json, ai_status, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(video_id) DO UPDATE SET
+      script = excluded.script,
+      hook_type = excluded.hook_type,
+      transcript_text = excluded.transcript_text,
+      transcript_status = excluded.transcript_status,
+      breakdown_json = excluded.breakdown_json,
+      ai_status = excluded.ai_status,
+      updated_at = excluded.updated_at
+  `).run(
+    videoId,
+    nextScript,
+    nextHookType || null,
+    nextTranscriptText,
+    nextTranscriptStatus,
+    nextBreakdownJson,
+    nextAiStatus,
+    updatedAt,
+  )
+  return {
+    videoId,
+    script: nextScript,
+    hookType: nextHookType || null,
+    transcriptText: nextTranscriptText,
+    transcriptStatus: nextTranscriptStatus,
+    breakdown: parseJson(nextBreakdownJson, null),
+    aiStatus: nextAiStatus,
+    updatedAt,
+  }
+}
+
+function getVideoById(videoId) {
+  const row = db.prepare('SELECT payload FROM videos WHERE id = ?').get(videoId)
+  return row ? applyScript(parseJson(row.payload, null)) : null
+}
+
+function getMonitoredCreators() {
+  return db.prepare('SELECT payload, apps, updated_at FROM monitored_creators ORDER BY updated_at DESC').all()
+    .map(row => ({
+      ...parseJson(row.payload, {}),
+      apps: parseJson(row.apps, []),
+      source: 'local',
+      updatedAt: row.updated_at,
+    }))
+}
+
+function saveMonitoredCreator(creator, apps) {
+  const updatedAt = nowIso()
+  const username = String(creator.username || '').toLowerCase()
+  const existing = db.prepare('SELECT apps FROM monitored_creators WHERE username = ?').get(username)
+  const mergedApps = Array.from(new Set([...(existing ? parseJson(existing.apps, []) : []), ...apps]))
+  const payload = { ...creator, apps: mergedApps }
+  db.prepare(`
+    INSERT INTO monitored_creators (username, payload, apps, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET
+      payload = excluded.payload,
+      apps = excluded.apps,
+      updated_at = excluded.updated_at
+  `).run(username, JSON.stringify(payload), JSON.stringify(mergedApps), updatedAt)
+  return { ...payload, source: 'local', updatedAt }
+}
+
+function deleteMonitoredCreator(username) {
+  db.prepare('DELETE FROM monitored_creators WHERE username = ?').run(String(username).toLowerCase())
+}
+
+function setMeta(key, value) {
+  db.prepare(`
+    INSERT INTO sync_meta (key, value, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = excluded.updated_at
+  `).run(key, value, nowIso())
+}
+
+function getMeta() {
+  const rows = db.prepare('SELECT key, value, updated_at FROM sync_meta').all()
+  return Object.fromEntries(rows.map(row => [row.key, { value: row.value, updatedAt: row.updated_at }]))
+}
+
+module.exports = {
+  DB_PATH,
+  deleteMonitoredCreator,
+  getMeta,
+  getMonitoredCreators,
+  getVideoById,
+  getVideos,
+  getVideoScripts,
+  replaceAppVideos,
+  saveMonitoredCreator,
+  saveVideoScript,
+  sortVideosByNewest,
+  upsertVideos,
+}
