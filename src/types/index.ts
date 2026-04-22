@@ -1,4 +1,14 @@
-export type AppId = 'turbo' | 'studley' | 'coconote'
+export type AppId = string
+
+export interface AppConfig {
+  id: AppId
+  name: string
+  color: string
+  bgColor: string
+  borderColor: string
+  keywords?: string[]
+  createdAt?: string
+}
 
 export interface Creator {
   id: string
@@ -45,17 +55,7 @@ export interface ScriptBreakdown {
   reusableIdeas: string[]
 }
 
-export interface AppConfig {
-  id: AppId
-  name: string
-  color: string
-  bgColor: string
-  borderColor: string
-}
-
 export interface WeeklyStats {
   week: string
-  turbo: number
-  studley: number
-  coconote: number
+  [appId: string]: string | number
 }

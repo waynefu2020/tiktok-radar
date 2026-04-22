@@ -5,6 +5,7 @@ import TrendAnalysis from './pages/TrendAnalysis'
 import ScriptLibrary from './pages/ScriptLibrary'
 import Downloads from './pages/Downloads'
 import CreatorDatabase from './pages/CreatorDatabase'
+import AppManager from './pages/AppManager'
 import Placeholder from './pages/Placeholder'
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/scripts" element={<ScriptLibrary />} />
             <Route path="/downloads" element={<Downloads />} />
             <Route path="/creators" element={<CreatorDatabase />} />
+            <Route path="/apps" element={<AppManager />} />
             <Route path="/docs" element={<Placeholder title="使用文档" subtitle="快速上手指南" />} />
             <Route path="/settings" element={<Placeholder title="设置" subtitle="账号与偏好设置" />} />
           </Routes>

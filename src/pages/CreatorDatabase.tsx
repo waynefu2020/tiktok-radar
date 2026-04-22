@@ -2,11 +2,12 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Users, Heart, Video, ArrowUpDown, Plus, RefreshCw, Trash2, X, Loader2, AlertCircle } from 'lucide-react'
 import TopBar from '../components/TopBar'
 import AppBadge from '../components/AppBadge'
-import { APP_CONFIGS } from '../data/appConfig'
-import { AppId, Creator, Video as TikTokVideo } from '../types'
+
+import { AppId, AppConfig, Creator, Video as TikTokVideo } from '../types'
 import { fmt } from '../components/StatCard'
 import {
   deleteMonitoredCreator,
+  getApps,
   getMonitoredCreators,
   getStoredVideos,
   MonitoredCreator,
@@ -47,6 +48,11 @@ export default function CreatorDatabase() {
   const [videos, setVideos] = useState<TikTokVideo[]>([])
   const [loadingVideos, setLoadingVideos] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [appConfigs, setAppConfigs] = useState<AppConfig[]>([])
+
+  useEffect(() => {
+    getApps().then(setAppConfigs).catch(() => {})
+  }, [])
 
   const allCreators = useMemo<CreatorRow[]>(() => {
     const rows = new Map<string, CreatorRow>()
@@ -166,7 +172,7 @@ export default function CreatorDatabase() {
       <div className="flex items-center justify-between mt-6 mb-5 gap-3">
         <div className="flex items-center gap-2">
           <button className={`filter-btn${appFilter === 'all' ? ' active' : ''}`} onClick={() => setAppFilter('all')}>全部</button>
-          {APP_CONFIGS.map(app => (
+          {appConfigs.map(app => (
             <button
               key={app.id}
               className={`filter-btn${appFilter === app.id ? ' active' : ''}`}
@@ -342,7 +348,7 @@ export default function CreatorDatabase() {
               <div>
                 <div className="text-xs font-medium text-[#C8CBE0] mb-2">关联竞品</div>
                 <div className="flex flex-wrap gap-2">
-                  {APP_CONFIGS.map(app => {
+                  {appConfigs.map(app => {
                     const active = selectedApps.includes(app.id)
                     return (
                       <button

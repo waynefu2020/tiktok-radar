@@ -1,4 +1,4 @@
-import { Video, AppId, Creator, ScriptBreakdown } from '../types'
+import { Video, AppId, Creator, ScriptBreakdown, AppConfig } from '../types'
 
 export interface VideoCache {
   videos: Video[]
@@ -31,6 +31,13 @@ export interface BatchSyncResult {
 }
 
 export type MonitoredCreator = Creator & { source: 'local'; updatedAt: string }
+
+export async function getApps(): Promise<AppConfig[]> {
+  const res = await fetch('/api/apps')
+  if (!res.ok) throw new Error(`Load apps failed: HTTP ${res.status}`)
+  const data = await res.json()
+  return data.apps || []
+}
 
 function videoTime(video: Video) {
   const time = new Date(video.publishedAt).getTime()

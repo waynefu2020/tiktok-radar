@@ -8,13 +8,17 @@ const { spawn } = require('child_process')
 const FormData = require('form-data')
 const {
   DB_PATH,
+  deleteApp,
   deleteMonitoredCreator,
+  getAppById,
+  getApps,
   getMeta,
   getMonitoredCreators,
   getVideoById,
   getVideos,
   getVideoScripts,
   replaceAppVideos,
+  saveApp,
   saveMonitoredCreator,
   saveVideoScript,
   sortVideosByNewest,
@@ -44,11 +48,14 @@ const aiClient = axios.create({
   timeout: 60000,
 })
 
-// 竞品 App 搜索关键词配置
-const APP_KEYWORDS = {
-  turbo:      ['turbolearn ai', 'turboai app'],
-  studley:    ['studley app'],
-  coconote:   ['coconote'],
+// 动态加载竞品配置
+function getAppKeywords() {
+  const apps = getApps()
+  const map = {}
+  for (const app of apps) {
+    map[app.id] = app.keywords || []
+  }
+  return map
 }
 
 function firstUrl(list) {
@@ -627,7 +634,7 @@ app.get('/api/sync/:appId', async (req, res) => {
   const { appId } = req.params
   const count = parseInt(req.query.count) || 20
 
-  const keywords = APP_KEYWORDS[appId]
+  const keywords = getAppKeywords()[appId]
   if (!keywords) return res.status(400).json({ error: `Unknown app: ${appId}` })
 
   const allVideos = []
@@ -674,7 +681,7 @@ app.get('/api/sync/:appId', async (req, res) => {
 
 // 批量同步所有竞品
 app.get('/api/sync', async (req, res) => {
-  const appIds = Object.keys(APP_KEYWORDS)
+  const appIds = Object.keys(getAppKeywords())
   const results = {}
 
   await Promise.allSettled(
@@ -699,9 +706,37 @@ app.get('/api/sync', async (req, res) => {
   })
 })
 
+// 竞品配置 CRUD
+app.get('/api/apps', (_req, res) => {
+  res.json({ apps: getApps() })
+})
+
+app.post('/api/apps', (req, res) => {
+  const { id, name, color, bgColor, borderColor, keywords } = req.body
+  if (!id || !name) return res.status(400).json({ error: 'Missing id or name' })
+  const existing = getAppById(id)
+  if (existing) return res.status(409).json({ error: `App already exists: ${id}` })
+  const saved = saveApp({ id, name, color: color || '#6366F1', bgColor: bgColor || 'rgba(99,102,241,0.12)', borderColor: borderColor || 'rgba(99,102,241,0.3)', keywords: keywords || [] })
+  res.json({ app: saved })
+})
+
+app.put('/api/apps/:id', (req, res) => {
+  const { id } = req.params
+  const existing = getAppById(id)
+  if (!existing) return res.status(404).json({ error: 'App not found' })
+  const { name, color, bgColor, borderColor, keywords } = req.body
+  const saved = saveApp({ id, name: name ?? existing.name, color: color ?? existing.color, bgColor: bgColor ?? existing.bgColor, borderColor: borderColor ?? existing.borderColor, keywords: keywords ?? existing.keywords })
+  res.json({ app: saved })
+})
+
+app.delete('/api/apps/:id', (req, res) => {
+  deleteApp(req.params.id)
+  res.json({ ok: true })
+})
+
 // 健康检查
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, keyConfigured: !!TIKHUB_KEY, dbPath: DB_PATH })
+  res.json({ ok: true, keyConfigured: !!TIKHUB_KEY, dbPath: DB_PATH, apps: getApps().length })
 })
 
 app.listen(PORT, () => {

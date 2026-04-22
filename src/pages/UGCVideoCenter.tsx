@@ -3,10 +3,10 @@ import { Heart, MessageCircle, Bookmark, Share2, ExternalLink, FileText, Chevron
 import TopBar from '../components/TopBar'
 import StatCard, { fmt } from '../components/StatCard'
 import AppBadge from '../components/AppBadge'
-import { APP_CONFIGS } from '../data/appConfig'
-import { AppId, ScriptBreakdown, Video } from '../types'
+
+import { AppId, AppConfig, ScriptBreakdown, Video } from '../types'
 import { Video as VideoIcon, Users, Flame, Heart as HeartIcon } from 'lucide-react'
-import { analyzeVideoScript, checkHealth, getStoredVideos, sortVideosByNewest, syncAll, syncApp } from '../services/tikhub'
+import { analyzeVideoScript, checkHealth, getApps, getStoredVideos, sortVideosByNewest, syncAll, syncApp } from '../services/tikhub'
 
 const TIME_FILTERS = [
   { label: '最近7天', days: 7 },
@@ -242,6 +242,7 @@ export default function UGCVideoCenter() {
   const [appFilter, setAppFilter] = useState<AppId | 'all'>('all')
   const [timeFilter, setTimeFilter] = useState(9999)
   const [search, setSearch] = useState('')
+  const [appConfigs, setAppConfigs] = useState<AppConfig[]>([])
 
   // 真实数据状态
   const [realVideos, setRealVideos] = useState<Video[]>([])
@@ -250,6 +251,10 @@ export default function UGCVideoCenter() {
   const [syncingApp, setSyncingApp] = useState<AppId | 'all' | null>(null)
   const [serverOnline, setServerOnline] = useState<boolean | null>(null)
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
+
+  useEffect(() => {
+    getApps().then(setAppConfigs).catch(() => {})
+  }, [])
 
   const displayVideos = realVideos
 
@@ -321,7 +326,7 @@ export default function UGCVideoCenter() {
   const handleSyncApp = useCallback(async (appId: AppId) => {
     setSyncStatus('syncing')
     setSyncingApp(appId)
-    const cfg = APP_CONFIGS.find(a => a.id === appId)!
+    const cfg = appConfigs.find(a => a.id === appId) || { id: appId, name: appId, color: '#6366F1', bgColor: 'rgba(99,102,241,0.12)', borderColor: 'rgba(99,102,241,0.3)' }
     setSyncMessage(`正在同步 ${cfg.name}…`)
     try {
       const result = await syncApp(appId, 20)
@@ -358,7 +363,7 @@ export default function UGCVideoCenter() {
     <div className="p-6">
       <TopBar
         title="UGC 视频中心"
-        subtitle={`监控 ${APP_CONFIGS.length} 个竞品 App · ${realCount > 0 ? `${realCount} 条真实数据` : '正在加载真实数据'}`}
+        subtitle={`监控 ${appConfigs.length} 个竞品 App · ${realCount > 0 ? `${realCount} 条真实数据` : '正在加载真实数据'}`}
         onSearch={setSearch}
       />
 
@@ -385,7 +390,7 @@ export default function UGCVideoCenter() {
         </button>
 
         {/* Sync per app */}
-        {APP_CONFIGS.map(app => (
+        {appConfigs.map(app => (
           <button
             key={app.id}
             onClick={() => handleSyncApp(app.id)}
@@ -438,7 +443,7 @@ export default function UGCVideoCenter() {
           <button className={`filter-btn${appFilter === 'all' ? ' active' : ''}`} onClick={() => setAppFilter('all')}>
             全部 <span className="ml-1 text-[#6366F1]">{displayVideos.length}</span>
           </button>
-          {APP_CONFIGS.map(app => {
+          {appConfigs.map(app => {
             const count = displayVideos.filter(v => v.app === app.id).length
             return (
               <button

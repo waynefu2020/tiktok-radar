@@ -1,13 +1,14 @@
-import { AppId } from '../types'
+import { AppId, AppConfig } from '../types'
 import { getAppConfig } from '../data/appConfig'
 
 interface Props {
   app: AppId
   size?: 'sm' | 'md'
+  configs?: AppConfig[]
 }
 
-export default function AppBadge({ app, size = 'md' }: Props) {
-  const cfg = getAppConfig(app)
+export default function AppBadge({ app, size = 'md', configs }: Props) {
+  const cfg = configs ? (configs.find(a => a.id === app) || getAppConfig(app)) : getAppConfig(app)
   const cls = size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-xs px-2.5 py-1'
   return (
     <span

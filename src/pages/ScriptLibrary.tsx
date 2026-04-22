@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, Copy, ExternalLink, ChevronDown, ChevronUp, Pencil, Save, Loader2, RefreshCw, Sparkles, Mic, FileText } from 'lucide-react'
 import TopBar from '../components/TopBar'
 import AppBadge from '../components/AppBadge'
-import { APP_CONFIGS } from '../data/appConfig'
-import { AppId, ScriptBreakdown, Video } from '../types'
-import { applySavedScripts, getStoredVideos, saveVideoScript, syncAndCacheVideos } from '../services/tikhub'
+
+import { AppId, AppConfig, ScriptBreakdown, Video } from '../types'
+import { applySavedScripts, getApps, getStoredVideos, saveVideoScript, syncAndCacheVideos } from '../services/tikhub'
 
 const HOOK_LABELS: Record<string, { label: string; color: string }> = {
   question:  { label: '疑问式', color: '#6366F1' },
@@ -239,6 +239,11 @@ export default function ScriptLibrary() {
   const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [appConfigs, setAppConfigs] = useState<AppConfig[]>([])
+
+  useEffect(() => {
+    getApps().then(setAppConfigs).catch(() => {})
+  }, [])
 
   const reloadSavedScripts = async () => {
     const cache = await getStoredVideos()
@@ -299,7 +304,7 @@ export default function ScriptLibrary() {
       <div className="flex items-center gap-3 flex-wrap mb-5">
         <div className="flex items-center gap-2">
           <button className={`filter-btn${appFilter === 'all' ? ' active' : ''}`} onClick={() => setAppFilter('all')}>全部 App</button>
-          {APP_CONFIGS.map(app => (
+          {appConfigs.map(app => (
             <button
               key={app.id}
               className={`filter-btn${appFilter === app.id ? ' active' : ''}`}

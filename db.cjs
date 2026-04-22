@@ -46,6 +46,16 @@ db.exec(`
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS apps (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#6366F1',
+    bg_color TEXT NOT NULL DEFAULT 'rgba(99,102,241,0.12)',
+    border_color TEXT NOT NULL DEFAULT 'rgba(99,102,241,0.3)',
+    keywords TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+  );
 `)
 
 for (const column of [
@@ -66,6 +76,66 @@ for (const column of [
 function nowIso() {
   return new Date().toISOString()
 }
+
+// --- apps (竞品配置) ---
+
+function ensureDefaultApps() {
+  const count = db.prepare('SELECT COUNT(*) as c FROM apps').get().c
+  if (count > 0) return
+  const defaults = [
+    { id: 'turbo', name: 'Turbo AI', color: '#6366F1', bgColor: 'rgba(99, 102, 241, 0.12)', borderColor: 'rgba(99, 102, 241, 0.3)', keywords: ['turbolearn ai', 'turboai app'] },
+    { id: 'studley', name: 'Studley', color: '#10B981', bgColor: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.3)', keywords: ['studley app'] },
+    { id: 'coconote', name: 'Coconote', color: '#22D3EE', bgColor: 'rgba(34, 211, 238, 0.12)', borderColor: 'rgba(34, 211, 238, 0.3)', keywords: ['coconote'] },
+  ]
+  const stmt = db.prepare(`INSERT INTO apps (id, name, color, bg_color, border_color, keywords, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+  const ts = nowIso()
+  db.exec('BEGIN')
+  try {
+    for (const app of defaults) {
+      stmt.run(app.id, app.name, app.color, app.bgColor, app.borderColor, JSON.stringify(app.keywords), ts)
+    }
+    db.exec('COMMIT')
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+}
+
+function getApps() {
+  const rows = db.prepare('SELECT id, name, color, bg_color as bgColor, border_color as borderColor, keywords, created_at as createdAt FROM apps ORDER BY created_at').all()
+  return rows.map(row => ({
+    ...row,
+    keywords: parseJson(row.keywords, []),
+  }))
+}
+
+function getAppById(id) {
+  const row = db.prepare('SELECT id, name, color, bg_color as bgColor, border_color as borderColor, keywords, created_at as createdAt FROM apps WHERE id = ?').get(id)
+  if (!row) return null
+  return { ...row, keywords: parseJson(row.keywords, []) }
+}
+
+function saveApp({ id, name, color, bgColor, borderColor, keywords }) {
+  const existing = db.prepare('SELECT id FROM apps WHERE id = ?').get(id)
+  const ts = nowIso()
+  if (existing) {
+    db.prepare(`UPDATE apps SET name = ?, color = ?, bg_color = ?, border_color = ?, keywords = ?, created_at = ? WHERE id = ?`)
+      .run(name, color, bgColor, borderColor, JSON.stringify(keywords || []), ts, id)
+  } else {
+    db.prepare(`INSERT INTO apps (id, name, color, bg_color, border_color, keywords, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, name, color, bgColor, borderColor, JSON.stringify(keywords || []), ts)
+  }
+  return getAppById(id)
+}
+
+function deleteApp(id) {
+  db.prepare('DELETE FROM apps WHERE id = ?').run(id)
+  db.prepare('DELETE FROM videos WHERE app = ?').run(id)
+  db.prepare('DELETE FROM video_scripts WHERE video_id IN (SELECT id FROM videos WHERE app = ?)').run(id)
+  return true
+}
+
+ensureDefaultApps()
 
 function parseJson(value, fallback) {
   try {
@@ -256,13 +326,17 @@ function getMeta() {
 
 module.exports = {
   DB_PATH,
+  deleteApp,
   deleteMonitoredCreator,
+  getAppById,
+  getApps,
   getMeta,
   getMonitoredCreators,
   getVideoById,
   getVideos,
   getVideoScripts,
   replaceAppVideos,
+  saveApp,
   saveMonitoredCreator,
   saveVideoScript,
   sortVideosByNewest,

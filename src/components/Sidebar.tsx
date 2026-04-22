@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Radar, LayoutDashboard, TrendingUp, FileText, Download, Users, BookOpen, Settings } from 'lucide-react'
+import { Radar, LayoutDashboard, TrendingUp, FileText, Download, Users, BookOpen, Settings, Box } from 'lucide-react'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'UGC 视频中心' },
@@ -7,6 +7,7 @@ const navItems = [
   { to: '/scripts', icon: FileText, label: '脚本拆解' },
   { to: '/downloads', icon: Download, label: '素材下载' },
   { to: '/creators', icon: Users, label: '达人库' },
+  { to: '/apps', icon: Box, label: '竞品管理' },
 ]
 
 const bottomItems = [

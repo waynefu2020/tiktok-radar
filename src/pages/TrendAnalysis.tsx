@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react'
 import TopBar from '../components/TopBar'
-import { APP_CONFIGS } from '../data/appConfig'
-import { Video } from '../types'
-import { getStoredVideos, syncAndCacheVideos } from '../services/tikhub'
+
+import { AppConfig, Video } from '../types'
+import { getApps, getStoredVideos, syncAndCacheVideos } from '../services/tikhub'
 
 const tooltipStyle = {
   backgroundColor: 'rgb(28,30,42)',
@@ -24,11 +24,13 @@ function weekKey(dateText: string) {
   return `${month}/${dayOfMonth}`
 }
 
-function buildWeeklyData(videos: Video[]) {
+function buildWeeklyData(videos: Video[], appIds: string[]) {
   const weeks = new Map<string, Record<string, string | number>>()
   for (const video of videos) {
     const key = weekKey(video.publishedAt)
-    const row = weeks.get(key) ?? { week: key, turbo: 0, studley: 0, coconote: 0 }
+    const base: Record<string, string | number> = { week: key }
+    for (const id of appIds) base[id] = 0
+    const row = weeks.get(key) ?? base
     row[video.app] = Number(row[video.app] || 0) + 1
     weeks.set(key, row)
   }
@@ -39,6 +41,11 @@ export default function TrendAnalysis() {
   const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [appConfigs, setAppConfigs] = useState<AppConfig[]>([])
+
+  useEffect(() => {
+    getApps().then(setAppConfigs).catch(() => {})
+  }, [])
 
   const loadVideos = async () => {
     setError('')
@@ -58,8 +65,9 @@ export default function TrendAnalysis() {
     if (videos.length === 0) loadVideos()
   }, [])
 
-  const weeklyData = useMemo(() => buildWeeklyData(videos), [videos])
-  const appVideoCount = useMemo(() => APP_CONFIGS.map(app => {
+  const appIds = useMemo(() => appConfigs.map(a => a.id), [appConfigs])
+  const weeklyData = useMemo(() => buildWeeklyData(videos, appIds), [videos, appIds])
+  const appVideoCount = useMemo(() => appConfigs.map(app => {
     const appVideos = videos.filter(v => v.app === app.id)
     return {
       name: app.name,
@@ -122,7 +130,7 @@ export default function TrendAnalysis() {
                 <YAxis tick={{ fill: '#8A8FA8', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: 11, color: '#8A8FA8' }} />
-                {APP_CONFIGS.map(app => (
+                {appConfigs.map(app => (
                   <Line
                     key={app.id}
                     type="monotone"
@@ -171,7 +179,7 @@ export default function TrendAnalysis() {
             <h3 className="text-sm font-semibold text-white mb-1">各 App 数据概览</h3>
             <p className="text-xs text-[#8A8FA8] mb-4">真实视频数量 & 平均点赞</p>
             <div className="space-y-3">
-              {APP_CONFIGS.map(app => {
+              {appConfigs.map(app => {
                 const row = appVideoCount.find(v => v.name === app.name)!
                 return (
                   <div key={app.id} className="flex items-center gap-3">
