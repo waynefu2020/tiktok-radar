@@ -24,8 +24,19 @@ function inRange(dateText: string, start: Date, end: Date) {
 
 function BreakdownView({ breakdown, source, inferredFrom }: { breakdown: ScriptBreakdown; source?: string; inferredFrom?: string }) {
   const isInferred = source === 'inferred'
+  const isAsr = source === 'asr'
   return (
     <div className="space-y-3">
+      {isAsr && (
+        <div className="flex items-start gap-2 rounded-lg bg-sky-500/10 border border-sky-500/20 p-3">
+          <Sparkles size={14} className="text-sky-400 mt-0.5 shrink-0" />
+          <div className="text-xs text-sky-200/80 leading-relaxed">
+            <span className="font-medium text-sky-300">基于 AI 语音转写拆解</span>
+            <span className="mx-1">·</span>
+            通过下载视频并提取音频，由 Whisper 模型自动转写生成逐字稿，再基于此做拆解分析。
+          </div>
+        </div>
+      )}
       {isInferred && (
         <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
           <Sparkles size={14} className="text-amber-400 mt-0.5 shrink-0" />
@@ -173,7 +184,7 @@ function VideoRow({ video }: { video: Video }) {
               {loadingScript ? (
                 <div className="flex items-center gap-2 text-sm text-[#818CF8]">
                   <Loader2 size={14} className="animate-spin" />
-                  正在获取真实字幕并生成 AI 拆解…
+                  正在分析视频脚本（下载视频→提取音频→AI 转写→拆解）…
                 </div>
               ) : scriptError ? (
                 <div className="text-sm text-red-400">{scriptError}</div>
@@ -200,6 +211,9 @@ function VideoRow({ video }: { video: Video }) {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-xs text-[#8A8FA8] font-medium">AI 拆解</div>
+                      {scriptVideo.analysisSource === 'asr' && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">AI 转写</span>
+                      )}
                       {scriptVideo.analysisSource === 'inferred' && (
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">推测</span>
                       )}

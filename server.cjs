@@ -2,6 +2,10 @@ require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const axios = require('axios')
+const fs = require('fs')
+const path = require('path')
+const { spawn } = require('child_process')
+const FormData = require('form-data')
 const {
   DB_PATH,
   deleteMonitoredCreator,
@@ -128,6 +132,14 @@ function normalizeVideo(aweme, appId) {
     []
   const coverUrl = coverUrls[0] || `https://picsum.photos/seed/${aweme.aweme_id}/160/90`
 
+  // 视频下载链接（用于 ASR 转写）
+  const videoUrl =
+    video.play_addr_h264?.url_list?.[0] ||
+    video.play_addr?.url_list?.[0] ||
+    video.download_no_watermark_addr?.url_list?.[0] ||
+    video.download_addr?.url_list?.[0] ||
+    ''
+
   const avatarUrls =
     author.avatar_thumb?.url_list ||
     author.avatar_medium?.url_list ||
@@ -145,6 +157,7 @@ function normalizeVideo(aweme, appId) {
     title: aweme.desc || '(无标题)',
     thumbnailUrl: coverUrl,
     tiktokUrl: `https://www.tiktok.com/@${author.unique_id}/video/${aweme.aweme_id}`,
+    videoUrl,
     app: appId,
     creator: {
       id: `creator_${author.uid || author.unique_id}`,
@@ -249,6 +262,91 @@ async function fetchTranscriptFromTikHub(video) {
     }
   }
   return ''
+}
+
+const TEMP_DIR = path.join(__dirname, 'temp')
+fs.mkdirSync(TEMP_DIR, { recursive: true })
+
+function runCommand(cmd, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', d => stdout += d)
+    child.stderr.on('data', d => stderr += d)
+    child.on('close', code => {
+      if (code !== 0) return reject(new Error(`${cmd} exited ${code}: ${stderr || stdout}`))
+      resolve(stdout)
+    })
+    child.on('error', reject)
+    if (opts.timeout) {
+      setTimeout(() => {
+        child.kill('SIGTERM')
+        reject(new Error(`${cmd} timeout after ${opts.timeout}ms`))
+      }, opts.timeout)
+    }
+  })
+}
+
+async function downloadAndTranscribe(video) {
+  const videoId = tiktokAwemeId(video.id)
+  const videoPath = path.join(TEMP_DIR, `${videoId}.mp4`)
+  const audioPath = path.join(TEMP_DIR, `${videoId}.mp3`)
+
+  try {
+    // 1. 下载视频（使用 yt-dlp）
+    console.log(`[ASR] Downloading video: ${video.tiktokUrl}`)
+    await runCommand('yt-dlp', [
+      '--no-warnings',
+      '-o', videoPath,
+      '-S', 'ext:mp4',
+      '--no-playlist',
+      video.tiktokUrl,
+    ], { timeout: 60000 })
+
+    if (!fs.existsSync(videoPath)) {
+      throw new Error('Video download failed: file not created')
+    }
+
+    // 2. 提取音频
+    console.log(`[ASR] Extracting audio...`)
+    await runCommand('ffmpeg', [
+      '-y', '-i', videoPath,
+      '-vn', '-ar', '16000', '-ac', '1',
+      '-c:a', 'libmp3lame', '-q:a', '4',
+      audioPath,
+    ], { timeout: 30000 })
+
+    if (!fs.existsSync(audioPath)) {
+      throw new Error('Audio extraction failed: file not created')
+    }
+
+    // 3. Whisper API 转写
+    console.log(`[ASR] Transcribing with Whisper...`)
+    const form = new FormData()
+    form.append('file', fs.createReadStream(audioPath))
+    form.append('model', 'whisper-1')
+    form.append('language', 'en')
+    form.append('response_format', 'text')
+
+    const whisperResp = await aiClient.post('/audio/transcriptions', form, {
+      headers: form.getHeaders(),
+      timeout: 120000,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    })
+
+    const transcript = String(whisperResp.data?.text || whisperResp.data || '').trim()
+    console.log(`[ASR] Transcript length: ${transcript.length}`)
+    return transcript
+  } catch (err) {
+    console.error(`[ASR] Failed for ${videoId}:`, err.message)
+    return ''
+  } finally {
+    // 4. 清理临时文件
+    try { fs.unlinkSync(videoPath) } catch {}
+    try { fs.unlinkSync(audioPath) } catch {}
+  }
 }
 
 function parseAiJson(content) {
@@ -412,12 +510,21 @@ app.post('/api/videos/:videoId/analyze-script', async (req, res) => {
 
   try {
     let transcript = video.transcriptText || ''
+    let source = video.transcriptText ? 'transcript' : null
+
     if (!transcript) {
       transcript = await fetchTranscriptFromTikHub(video)
+      if (transcript) source = 'transcript'
     }
 
     if (!transcript) {
-      // 第2层：无字幕时走推测拆解
+      // 第2层：尝试 ASR 音频转写
+      transcript = await downloadAndTranscribe(video)
+      if (transcript) source = 'asr'
+    }
+
+    if (!transcript) {
+      // 第3层：ASR 也失败，走推测拆解
       const inferred = video.breakdown
         ? { breakdown: video.breakdown, inferredFrom: video.inferredFrom || '' }
         : await generateInferredBreakdown(video)
@@ -435,7 +542,6 @@ app.post('/api/videos/:videoId/analyze-script', async (req, res) => {
         video: { ...video, ...saved, transcriptText: '', transcriptStatus: 'no_transcript', breakdown: inferred.breakdown, aiStatus: 'ready', analysisSource: 'inferred', inferredFrom: inferred.inferredFrom },
       })
     }
-
     const breakdown = video.breakdown || await generateBreakdown(video, transcript)
     const saved = saveVideoScript(video.id, {
       script: video.script || '',
@@ -444,7 +550,7 @@ app.post('/api/videos/:videoId/analyze-script', async (req, res) => {
       transcriptStatus: 'ready',
       breakdown,
       aiStatus: 'ready',
-      analysisSource: 'transcript',
+      analysisSource: source,
       inferredFrom: '',
     })
     res.json({
@@ -455,10 +561,11 @@ app.post('/api/videos/:videoId/analyze-script', async (req, res) => {
         transcriptStatus: 'ready',
         breakdown,
         aiStatus: 'ready',
-        analysisSource: 'transcript',
+        analysisSource: source,
         inferredFrom: '',
       },
     })
+    return
   } catch (err) {
     const existingTranscript = video.transcriptText || ''
     const saved = saveVideoScript(video.id, {

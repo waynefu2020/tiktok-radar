@@ -16,6 +16,7 @@ export interface Video {
   title: string
   thumbnailUrl: string
   tiktokUrl: string
+  videoUrl?: string
   app: AppId
   creator: Creator
   publishedAt: string
