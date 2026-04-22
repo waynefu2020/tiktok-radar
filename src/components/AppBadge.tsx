@@ -8,7 +8,9 @@ interface Props {
 }
 
 export default function AppBadge({ app, size = 'md', configs }: Props) {
-  const cfg = configs ? (configs.find(a => a.id === app) || getAppConfig(app)) : getAppConfig(app)
+  const cfg = configs?.find(a => a.id === app) || getAppConfig(app)
+  const isKnown = configs?.some(a => a.id === app) || cfg.id === app
+  const displayName = isKnown ? cfg.name : app
   const cls = size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-xs px-2.5 py-1'
   return (
     <span
@@ -19,7 +21,7 @@ export default function AppBadge({ app, size = 'md', configs }: Props) {
         border: `1px solid ${cfg.borderColor}`,
       }}
     >
-      {cfg.name}
+      {displayName}
     </span>
   )
 }

@@ -10,6 +10,7 @@ const {
   DB_PATH,
   deleteApp,
   deleteMonitoredCreator,
+  getHiddenCreators,
   getAppById,
   getApps,
   getMeta,
@@ -17,6 +18,7 @@ const {
   getVideoById,
   getVideos,
   getVideoScripts,
+  hideCreator,
   replaceAppVideos,
   saveApp,
   saveMonitoredCreator,
@@ -32,6 +34,11 @@ const TIKHUB_BASE = 'https://api.tikhub.io'
 const AI_BASE_URL = process.env.AI_BASE_URL || 'https://oneapi.rrdtech.cn/v1'
 const AI_API_KEY = process.env.AI_API_KEY
 const AI_MODEL = process.env.AI_MODEL || 'gpt-5.4'
+const FALLBACK_IMAGE = ''
+const TOOL_PATHS = {
+  'ffmpeg': ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'],
+  'yt-dlp': ['/opt/homebrew/bin/yt-dlp', '/usr/local/bin/yt-dlp', '/usr/bin/yt-dlp'],
+}
 
 app.use(cors())
 app.use(express.json())
@@ -88,7 +95,7 @@ function normalizeCreatorProfile(payload, selectedApps = []) {
     user.avatarThumb ||
     user.avatarMedium ||
     user.avatarLarger ||
-    `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`
+    FALLBACK_IMAGE
 
   const followers =
     user.follower_count ??
@@ -137,7 +144,7 @@ function normalizeVideo(aweme, appId) {
     video.dynamic_cover?.url_list ||
     video.origin_cover?.url_list ||
     []
-  const coverUrl = coverUrls[0] || `https://picsum.photos/seed/${aweme.aweme_id}/160/90`
+  const coverUrl = coverUrls[0] || FALLBACK_IMAGE
 
   // 视频下载链接（用于 ASR 转写）
   const videoUrl =
@@ -151,7 +158,7 @@ function normalizeVideo(aweme, appId) {
     author.avatar_thumb?.url_list ||
     author.avatar_medium?.url_list ||
     []
-  const avatarUrl = avatarUrls[0] || `https://api.dicebear.com/7.x/avataaars/svg?seed=${author.unique_id}`
+  const avatarUrl = avatarUrls[0] || FALLBACK_IMAGE
 
   const tags = (aweme.text_extra || aweme.cha_list || [])
     .filter(t => t.hashtag_name || t.cha_name)
@@ -295,7 +302,33 @@ function runCommand(cmd, args, opts = {}) {
   })
 }
 
+function commandAvailable(cmd) {
+  const args = String(cmd).includes('ffmpeg') ? ['-version'] : ['--version']
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { stdio: 'ignore' })
+    child.on('close', code => resolve(code === 0))
+    child.on('error', () => resolve(false))
+  })
+}
+
+async function resolveTool(cmd) {
+  if (await commandAvailable(cmd)) return cmd
+  for (const candidate of TOOL_PATHS[cmd] || []) {
+    if (fs.existsSync(candidate) && await commandAvailable(candidate)) return candidate
+  }
+  return ''
+}
+
 async function downloadAndTranscribe(video) {
+  const [ytDlpPath, ffmpegPath] = await Promise.all([
+    resolveTool('yt-dlp'),
+    resolveTool('ffmpeg'),
+  ])
+  if (!ytDlpPath || !ffmpegPath) {
+    console.warn('[ASR] Skipped: yt-dlp or ffmpeg is not available')
+    return ''
+  }
+
   const videoId = tiktokAwemeId(video.id)
   const videoPath = path.join(TEMP_DIR, `${videoId}.mp4`)
   const audioPath = path.join(TEMP_DIR, `${videoId}.mp3`)
@@ -303,7 +336,7 @@ async function downloadAndTranscribe(video) {
   try {
     // 1. 下载视频（使用 yt-dlp）
     console.log(`[ASR] Downloading video: ${video.tiktokUrl}`)
-    await runCommand('yt-dlp', [
+    await runCommand(ytDlpPath, [
       '--no-warnings',
       '-o', videoPath,
       '-S', 'ext:mp4',
@@ -317,7 +350,7 @@ async function downloadAndTranscribe(video) {
 
     // 2. 提取音频
     console.log(`[ASR] Extracting audio...`)
-    await runCommand('ffmpeg', [
+    await runCommand(ffmpegPath, [
       '-y', '-i', videoPath,
       '-vn', '-ar', '16000', '-ac', '1',
       '-c:a', 'libmp3lame', '-q:a', '4',
@@ -597,6 +630,11 @@ app.get('/api/monitored-creators', (_req, res) => {
   res.json({ total: creators.length, creators })
 })
 
+app.get('/api/hidden-creators', (_req, res) => {
+  const creators = getHiddenCreators()
+  res.json({ total: creators.length, creators })
+})
+
 app.post('/api/monitored-creators', async (req, res) => {
   const rawUsername = String(req.body?.username || '').trim()
   const apps = Array.isArray(req.body?.apps) ? req.body.apps : []
@@ -629,13 +667,19 @@ app.delete('/api/monitored-creators/:username', (req, res) => {
   res.json({ ok: true })
 })
 
-// 搜索某个竞品 App 的视频
-app.get('/api/sync/:appId', async (req, res) => {
-  const { appId } = req.params
-  const count = parseInt(req.query.count) || 20
+app.delete('/api/creators/:username', (req, res) => {
+  const hidden = hideCreator(req.params.username)
+  if (!hidden) return res.status(400).json({ error: 'Missing username' })
+  res.json({ ok: true, hidden })
+})
 
+async function syncAppVideos(appId, count = 20) {
   const keywords = getAppKeywords()[appId]
-  if (!keywords) return res.status(400).json({ error: `Unknown app: ${appId}` })
+  if (!keywords) {
+    const err = new Error(`Unknown app: ${appId}`)
+    err.statusCode = 400
+    throw err
+  }
 
   const allVideos = []
   const errors = []
@@ -671,12 +715,24 @@ app.get('/api/sync/:appId', async (req, res) => {
   sortVideosByNewest(allVideos)
   replaceAppVideos(appId, allVideos)
 
-  res.json({
+  return {
     appId,
     total: allVideos.length,
     videos: getVideos().filter(v => v.app === appId),
     errors: errors.length ? errors : undefined,
-  })
+  }
+}
+
+// 搜索某个竞品 App 的视频
+app.get('/api/sync/:appId', async (req, res) => {
+  const { appId } = req.params
+  const count = parseInt(req.query.count) || 20
+
+  try {
+    res.json(await syncAppVideos(appId, count))
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || `Sync failed for ${appId}` })
+  }
 })
 
 // 批量同步所有竞品
@@ -687,8 +743,7 @@ app.get('/api/sync', async (req, res) => {
   await Promise.allSettled(
     appIds.map(async (appId) => {
       try {
-        const resp = await axios.get(`http://localhost:${PORT}/api/sync/${appId}?count=15`)
-        results[appId] = resp.data
+        results[appId] = await syncAppVideos(appId, 15)
       } catch (err) {
         results[appId] = { appId, total: 0, videos: [], errors: [{ error: err.message }] }
       }
@@ -735,8 +790,25 @@ app.delete('/api/apps/:id', (req, res) => {
 })
 
 // 健康检查
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, keyConfigured: !!TIKHUB_KEY, dbPath: DB_PATH, apps: getApps().length })
+app.get('/api/health', async (_req, res) => {
+  const [ytDlpPath, ffmpegPath] = await Promise.all([
+    resolveTool('yt-dlp'),
+    resolveTool('ffmpeg'),
+  ])
+  res.json({
+    ok: true,
+    keyConfigured: !!TIKHUB_KEY,
+    aiConfigured: !!AI_API_KEY,
+    asrAvailable: !!ytDlpPath && !!ffmpegPath,
+    tools: {
+      ytDlpAvailable: !!ytDlpPath,
+      ytDlpPath,
+      ffmpegAvailable: !!ffmpegPath,
+      ffmpegPath,
+    },
+    dbPath: DB_PATH,
+    apps: getApps().length,
+  })
 })
 
 app.listen(PORT, () => {

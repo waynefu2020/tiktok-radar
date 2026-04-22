@@ -3,15 +3,20 @@ import { AlertCircle, ExternalLink, Image, Loader2, RefreshCw, Video as VideoIco
 import TopBar from '../components/TopBar'
 import AppBadge from '../components/AppBadge'
 import { fmt } from '../components/StatCard'
-import { Video } from '../types'
-import { getStoredVideos, sortVideosByNewest, syncAndCacheVideos } from '../services/tikhub'
+import { AppConfig, Video } from '../types'
+import { getApps, getStoredVideos, sortVideosByNewest, syncAndCacheVideos } from '../services/tikhub'
 
 export default function Downloads() {
   const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [appConfigs, setAppConfigs] = useState<AppConfig[]>([])
 
   const sorted = useMemo(() => sortVideosByNewest(videos), [videos])
+
+  useEffect(() => {
+    getApps().then(setAppConfigs).catch(() => {})
+  }, [])
 
   const loadVideos = async () => {
     setError('')
@@ -67,7 +72,7 @@ export default function Downloads() {
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2">
-                  <AppBadge app={video.app} size="sm" />
+                  <AppBadge app={video.app} size="sm" configs={appConfigs} />
                   <span className="text-xs text-[#8A8FA8]">@{video.creator.username}</span>
                   <span className="text-xs text-[#555873]">{video.publishedAt}</span>
                 </div>

@@ -28,6 +28,11 @@ db.exec(`
     updated_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS hidden_creators (
+    username TEXT PRIMARY KEY,
+    hidden_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS video_scripts (
     video_id TEXT PRIMARY KEY,
     script TEXT NOT NULL DEFAULT '',
@@ -129,9 +134,9 @@ function saveApp({ id, name, color, bgColor, borderColor, keywords }) {
 }
 
 function deleteApp(id) {
-  db.prepare('DELETE FROM apps WHERE id = ?').run(id)
-  db.prepare('DELETE FROM videos WHERE app = ?').run(id)
   db.prepare('DELETE FROM video_scripts WHERE video_id IN (SELECT id FROM videos WHERE app = ?)').run(id)
+  db.prepare('DELETE FROM videos WHERE app = ?').run(id)
+  db.prepare('DELETE FROM apps WHERE id = ?').run(id)
   return true
 }
 
@@ -309,6 +314,27 @@ function deleteMonitoredCreator(username) {
   db.prepare('DELETE FROM monitored_creators WHERE username = ?').run(String(username).toLowerCase())
 }
 
+function hideCreator(username) {
+  const normalized = String(username || '').trim().replace(/^@/, '').toLowerCase()
+  if (!normalized) return null
+  const hiddenAt = nowIso()
+  db.prepare(`
+    INSERT INTO hidden_creators (username, hidden_at)
+    VALUES (?, ?)
+    ON CONFLICT(username) DO UPDATE SET hidden_at = excluded.hidden_at
+  `).run(normalized, hiddenAt)
+  deleteMonitoredCreator(normalized)
+  return { username: normalized, hiddenAt }
+}
+
+function unhideCreator(username) {
+  db.prepare('DELETE FROM hidden_creators WHERE username = ?').run(String(username || '').trim().replace(/^@/, '').toLowerCase())
+}
+
+function getHiddenCreators() {
+  return db.prepare('SELECT username, hidden_at as hiddenAt FROM hidden_creators ORDER BY hidden_at DESC').all()
+}
+
 function setMeta(key, value) {
   db.prepare(`
     INSERT INTO sync_meta (key, value, updated_at)
@@ -328,6 +354,7 @@ module.exports = {
   DB_PATH,
   deleteApp,
   deleteMonitoredCreator,
+  getHiddenCreators,
   getAppById,
   getApps,
   getMeta,
@@ -337,6 +364,7 @@ module.exports = {
   getVideoScripts,
   replaceAppVideos,
   saveApp,
+  hideCreator,
   saveMonitoredCreator,
   saveVideoScript,
   sortVideosByNewest,

@@ -69,7 +69,7 @@ function BreakdownView({ breakdown }: { breakdown: ScriptBreakdown }) {
   )
 }
 
-function ScriptCard({ video, onSaved }: { video: Video; onSaved: () => void }) {
+function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: AppConfig[]; onSaved: () => void }) {
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
   const [noteText, setNoteText] = useState(video.script ?? '')
@@ -100,7 +100,15 @@ function ScriptCard({ video, onSaved }: { video: Video; onSaved: () => void }) {
         className="flex items-start gap-4 p-4 cursor-pointer hover:bg-[rgb(18,20,28)] transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
-        <img src={video.thumbnailUrl} alt="" className="w-20 h-11 rounded-lg object-cover shrink-0 bg-[rgb(28,30,42)]" />
+        <div className="w-20 h-11 rounded-lg shrink-0 bg-[rgb(28,30,42)] overflow-hidden">
+          {video.thumbnailUrl ? (
+            <img src={video.thumbnailUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-[#555873]">
+              <FileText size={15} />
+            </div>
+          )}
+        </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2 mb-1.5">
             <p className="text-sm text-white leading-snug flex-1 line-clamp-2">{video.title}</p>
@@ -114,7 +122,7 @@ function ScriptCard({ video, onSaved }: { video: Video; onSaved: () => void }) {
             )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <AppBadge app={video.app} size="sm" />
+            <AppBadge app={video.app} size="sm" configs={appConfigs} />
             <span className="text-xs text-[#8A8FA8]">@{video.creator.username}</span>
             <span className="text-xs text-[#555873]">{video.publishedAt}</span>
             {hasContent && <SourceBadge source={source} />}
@@ -349,7 +357,7 @@ export default function ScriptLibrary() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(v => <ScriptCard key={v.id} video={v} onSaved={reloadSavedScripts} />)}
+          {filtered.map(v => <ScriptCard key={v.id} video={v} appConfigs={appConfigs} onSaved={reloadSavedScripts} />)}
         </div>
       )}
     </div>

@@ -6,7 +6,7 @@ import AppBadge from '../components/AppBadge'
 
 import { AppId, AppConfig, ScriptBreakdown, Video } from '../types'
 import { Video as VideoIcon, Users, Flame, Heart as HeartIcon } from 'lucide-react'
-import { analyzeVideoScript, checkHealth, getApps, getStoredVideos, sortVideosByNewest, syncAll, syncApp } from '../services/tikhub'
+import { analyzeVideoScript, getApps, getHealth, getStoredVideos, sortVideosByNewest, syncAll, syncApp } from '../services/tikhub'
 
 const TIME_FILTERS = [
   { label: '最近7天', days: 7 },
@@ -81,7 +81,7 @@ function BreakdownView({ breakdown, source, inferredFrom }: { breakdown: ScriptB
   )
 }
 
-function VideoRow({ video }: { video: Video }) {
+function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[] }) {
   const [expanded, setExpanded] = useState(false)
   const [scriptVideo, setScriptVideo] = useState(video)
   const [loadingScript, setLoadingScript] = useState(false)
@@ -110,7 +110,13 @@ function VideoRow({ video }: { video: Video }) {
         <td className="px-4 py-3 w-[42%]">
           <div className="flex items-start gap-3">
             <div className="w-16 h-9 rounded overflow-hidden shrink-0 bg-[rgb(28,30,42)]">
-              <img src={video.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" onError={e => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${video.id}/160/90` }} />
+              {video.thumbnailUrl ? (
+                <img src={video.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-[#555873]">
+                  <VideoIcon size={15} />
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <a
@@ -130,10 +136,16 @@ function VideoRow({ video }: { video: Video }) {
             </div>
           </div>
         </td>
-        <td className="px-3 py-3 w-[10%]"><AppBadge app={video.app} /></td>
+        <td className="px-3 py-3 w-[10%]"><AppBadge app={video.app} configs={appConfigs} /></td>
         <td className="px-3 py-3 w-[12%]">
           <div className="flex items-center gap-2">
-            <img src={video.creator.avatarUrl} alt="" className="w-6 h-6 rounded-full shrink-0" onError={e => { (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${video.creator.username}` }} />
+            {video.creator.avatarUrl ? (
+              <img src={video.creator.avatarUrl} alt="" className="w-6 h-6 rounded-full shrink-0 bg-[rgb(28,30,42)]" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            ) : (
+              <div className="w-6 h-6 rounded-full shrink-0 bg-[rgb(28,30,42)] border border-[#2E3045] flex items-center justify-center text-[10px] text-[#8A8FA8]">
+                {video.creator.username.slice(0, 1).toUpperCase()}
+              </div>
+            )}
             <span className="text-xs text-[#C8CBE0] truncate">@{video.creator.username}</span>
           </div>
         </td>
@@ -250,6 +262,7 @@ export default function UGCVideoCenter() {
   const [syncMessage, setSyncMessage] = useState('')
   const [syncingApp, setSyncingApp] = useState<AppId | 'all' | null>(null)
   const [serverOnline, setServerOnline] = useState<boolean | null>(null)
+  const [asrAvailable, setAsrAvailable] = useState<boolean | null>(null)
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
 
   useEffect(() => {
@@ -302,8 +315,10 @@ export default function UGCVideoCenter() {
 
   // 检查后端是否在线；在线时进入页面默认同步真实数据。
   useEffect(() => {
-    checkHealth().then(ok => {
+    getHealth().then(health => {
+      const ok = health.ok && health.keyConfigured
       setServerOnline(ok)
+      setAsrAvailable(health.asrAvailable ?? null)
       if (ok) {
         getStoredVideos()
           .then(cache => {
@@ -319,6 +334,11 @@ export default function UGCVideoCenter() {
         setSyncStatus('error')
         setSyncMessage('API 服务离线或未配置 Key，无法获取真实数据')
       }
+    }).catch(() => {
+      setServerOnline(false)
+      setAsrAvailable(false)
+      setSyncStatus('error')
+      setSyncMessage('API 服务离线或未配置 Key，无法获取真实数据')
     })
   }, [handleSyncAll])
 
@@ -378,6 +398,12 @@ export default function UGCVideoCenter() {
           <div className={`w-1.5 h-1.5 rounded-full ${serverOnline === null ? 'bg-[#8A8FA8]' : serverOnline ? 'bg-emerald-400' : 'bg-red-400'}`} />
           {serverOnline === null ? '检测中…' : serverOnline ? 'API 服务在线' : 'API 服务离线'}
         </div>
+        {serverOnline && asrAvailable === false && (
+          <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300">
+            <AlertCircle size={12} />
+            未检测到视频转写工具，将优先使用字幕，失败后只做推测拆解
+          </div>
+        )}
 
         {/* Sync all */}
         <button
@@ -488,7 +514,7 @@ export default function UGCVideoCenter() {
                 </td>
               </tr>
             ) : (
-              filtered.map(v => <VideoRow key={v.id} video={v} />)
+              filtered.map(v => <VideoRow key={v.id} video={v} appConfigs={appConfigs} />)
             )}
           </tbody>
         </table>

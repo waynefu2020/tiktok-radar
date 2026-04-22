@@ -14,27 +14,54 @@ const tooltipStyle = {
   fontSize: 12,
 }
 
-function weekKey(dateText: string) {
-  const date = new Date(dateText)
-  if (Number.isNaN(date.getTime())) return '未知'
+const WEEK_BUCKETS = 8
+
+function startOfWeek(input: Date) {
+  const date = new Date(input)
+  date.setHours(0, 0, 0, 0)
   const day = date.getDay() || 7
   date.setDate(date.getDate() - day + 1)
+  return date
+}
+
+function weekId(date: Date) {
+  return date.toISOString().split('T')[0]
+}
+
+function weekLabel(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const dayOfMonth = String(date.getDate()).padStart(2, '0')
   return `${month}/${dayOfMonth}`
 }
 
+function videoWeekId(dateText: string) {
+  const date = new Date(dateText)
+  if (Number.isNaN(date.getTime())) return ''
+  return weekId(startOfWeek(date))
+}
+
 function buildWeeklyData(videos: Video[], appIds: string[]) {
+  const currentWeek = startOfWeek(new Date())
   const weeks = new Map<string, Record<string, string | number>>()
-  for (const video of videos) {
-    const key = weekKey(video.publishedAt)
-    const base: Record<string, string | number> = { week: key }
-    for (const id of appIds) base[id] = 0
-    const row = weeks.get(key) ?? base
-    row[video.app] = Number(row[video.app] || 0) + 1
-    weeks.set(key, row)
+
+  for (let index = WEEK_BUCKETS - 1; index >= 0; index -= 1) {
+    const date = new Date(currentWeek)
+    date.setDate(currentWeek.getDate() - index * 7)
+    const row: Record<string, string | number> = {
+      id: weekId(date),
+      week: weekLabel(date),
+    }
+    for (const id of appIds) row[id] = 0
+    weeks.set(String(row.id), row)
   }
-  return Array.from(weeks.values()).sort((a, b) => String(a.week).localeCompare(String(b.week)))
+
+  for (const video of videos) {
+    const key = videoWeekId(video.publishedAt)
+    const row = weeks.get(key)
+    if (!row) continue
+    row[video.app] = Number(row[video.app] || 0) + 1
+  }
+  return Array.from(weeks.values())
 }
 
 export default function TrendAnalysis() {
@@ -76,7 +103,7 @@ export default function TrendAnalysis() {
       color: app.color,
       avgLikes: appVideos.length ? Math.round(appVideos.reduce((s, v) => s + v.likes, 0) / appVideos.length) : 0,
     }
-  }), [videos])
+  }), [appConfigs, videos])
 
   const popularTags = useMemo(() => {
     const counts = new Map<string, number>()
@@ -121,8 +148,8 @@ export default function TrendAnalysis() {
       ) : (
         <div className="grid grid-cols-2 gap-6">
           <div className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] p-5">
-            <h3 className="text-sm font-semibold text-white mb-1">每周新增视频量</h3>
-            <p className="text-xs text-[#8A8FA8] mb-4">按真实视频发布时间聚合</p>
+            <h3 className="text-sm font-semibold text-white mb-1">最近 8 周新增视频量</h3>
+            <p className="text-xs text-[#8A8FA8] mb-4">按真实视频发布时间聚合，横轴为每周起始日期</p>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={weeklyData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2E3045" />

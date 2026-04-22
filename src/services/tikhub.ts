@@ -31,6 +31,21 @@ export interface BatchSyncResult {
 }
 
 export type MonitoredCreator = Creator & { source: 'local'; updatedAt: string }
+export interface HiddenCreator {
+  username: string
+  hiddenAt: string
+}
+
+export interface HealthStatus {
+  ok: boolean
+  keyConfigured: boolean
+  aiConfigured?: boolean
+  asrAvailable?: boolean
+  tools?: {
+    ytDlpAvailable?: boolean
+    ffmpegAvailable?: boolean
+  }
+}
 
 export async function getApps(): Promise<AppConfig[]> {
   const res = await fetch('/api/apps')
@@ -99,6 +114,8 @@ export async function loadVideoScripts(): Promise<Record<string, VideoScriptDraf
       transcriptStatus: row.transcript_status || row.transcriptStatus || undefined,
       breakdown: row.breakdown_json ? JSON.parse(row.breakdown_json) : row.breakdown || null,
       aiStatus: row.ai_status || row.aiStatus || undefined,
+      analysisSource: row.analysis_source || row.analysisSource || undefined,
+      inferredFrom: row.inferred_from || row.inferredFrom || '',
     },
   ])
   return Object.fromEntries(entries)
@@ -153,6 +170,13 @@ export async function getMonitoredCreators(): Promise<MonitoredCreator[]> {
   return data.creators || []
 }
 
+export async function getHiddenCreators(): Promise<HiddenCreator[]> {
+  const res = await fetch('/api/hidden-creators')
+  if (!res.ok) throw new Error(`Load hidden creators failed: HTTP ${res.status}`)
+  const data = await res.json()
+  return data.creators || []
+}
+
 export async function saveMonitoredCreator(username: string, apps: AppId[]): Promise<MonitoredCreator> {
   const res = await fetch('/api/monitored-creators', {
     method: 'POST',
@@ -172,10 +196,23 @@ export async function deleteMonitoredCreator(username: string) {
   if (!res.ok) throw new Error(`Delete monitored creator failed: HTTP ${res.status}`)
 }
 
+export async function deleteCreator(username: string) {
+  const res = await fetch(`/api/creators/${encodeURIComponent(username)}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(err.error || `Delete creator failed: HTTP ${res.status}`)
+  }
+}
+
+export async function getHealth(): Promise<HealthStatus> {
+  const res = await fetch('/api/health')
+  if (!res.ok) throw new Error(`Health check failed: HTTP ${res.status}`)
+  return res.json()
+}
+
 export async function checkHealth(): Promise<boolean> {
   try {
-    const res = await fetch('/api/health')
-    const data = await res.json()
+    const data = await getHealth()
     return data.ok && data.keyConfigured
   } catch {
     return false

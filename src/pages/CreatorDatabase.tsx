@@ -6,8 +6,10 @@ import AppBadge from '../components/AppBadge'
 import { AppId, AppConfig, Creator, Video as TikTokVideo } from '../types'
 import { fmt } from '../components/StatCard'
 import {
+  deleteCreator,
   deleteMonitoredCreator,
   getApps,
+  getHiddenCreators,
   getMonitoredCreators,
   getStoredVideos,
   MonitoredCreator,
@@ -45,10 +47,12 @@ export default function CreatorDatabase() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [videos, setVideos] = useState<TikTokVideo[]>([])
   const [loadingVideos, setLoadingVideos] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [appConfigs, setAppConfigs] = useState<AppConfig[]>([])
+  const [hiddenUsernames, setHiddenUsernames] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     getApps().then(setAppConfigs).catch(() => {})
@@ -63,7 +67,8 @@ export default function CreatorDatabase() {
       rows.set(creator.username.toLowerCase(), creator)
     }
     return Array.from(rows.values())
-  }, [localCreators, videos])
+      .filter(creator => !hiddenUsernames.has(creator.username.toLowerCase()))
+  }, [hiddenUsernames, localCreators, videos])
 
   const loadRealVideos = async () => {
     setLoadError('')
@@ -81,7 +86,12 @@ export default function CreatorDatabase() {
 
   const loadLocalCreators = async () => {
     try {
-      setLocalCreators(await getMonitoredCreators())
+      const [monitored, hidden] = await Promise.all([
+        getMonitoredCreators(),
+        getHiddenCreators(),
+      ])
+      setLocalCreators(monitored)
+      setHiddenUsernames(new Set(hidden.map(creator => creator.username.toLowerCase())))
     } catch (err: any) {
       setLoadError(err.message || '获取监控账号失败')
     }
@@ -157,9 +167,23 @@ export default function CreatorDatabase() {
     }
   }
 
-  const handleDeleteCreator = async (creator: LocalCreator) => {
-    await deleteMonitoredCreator(creator.username)
-    await loadLocalCreators()
+  const handleDeleteCreator = async (creator: CreatorRow) => {
+    const ok = confirm(`确定从达人库删除 @${creator.username}？\n删除后刷新页面也不会再显示。`)
+    if (!ok) return
+
+    setDeleting(creator.username)
+    try {
+      if (creator.source === 'local') {
+        await deleteMonitoredCreator(creator.username)
+      }
+      await deleteCreator(creator.username)
+      setHiddenUsernames(prev => new Set(prev).add(creator.username.toLowerCase()))
+      setLocalCreators(prev => prev.filter(item => item.username.toLowerCase() !== creator.username.toLowerCase()))
+    } catch (err: any) {
+      alert(err.message || '删除达人失败')
+    } finally {
+      setDeleting(null)
+    }
   }
 
   return (
@@ -246,24 +270,38 @@ export default function CreatorDatabase() {
                 <tr key={creator.id} className="table-row">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={creator.avatarUrl}
-                        alt=""
-                        className="w-9 h-9 rounded-full shrink-0 bg-[rgb(28,30,42)]"
-                        onError={e => { (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${creator.username}` }}
-                      />
-                      <div>
+                      {creator.avatarUrl ? (
+                        <img
+                          src={creator.avatarUrl}
+                          alt=""
+                          className="w-9 h-9 rounded-full shrink-0 bg-[rgb(28,30,42)]"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full shrink-0 bg-[rgb(28,30,42)] border border-[#2E3045] flex items-center justify-center text-xs text-[#8A8FA8]">
+                          {creator.username.slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <div className="text-sm text-white font-medium">{creator.displayName}</div>
                           {isLocal && <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 rounded px-1.5 py-0.5">监控中</span>}
                         </div>
-                        <div className="text-xs text-[#8A8FA8]">@{creator.username}</div>
+                        <a
+                          href={`https://www.tiktok.com/@${creator.username}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block text-xs text-[#8A8FA8] hover:text-[#22D3EE] transition-colors truncate"
+                          title="打开 TikTok 达人主页"
+                        >
+                          @{creator.username}
+                        </a>
                       </div>
                     </div>
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex gap-1.5 flex-wrap">
-                      {creator.apps.map(a => <AppBadge key={a} app={a} size="sm" />)}
+                      {creator.apps.map(a => <AppBadge key={a} app={a} size="sm" configs={appConfigs} />)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
@@ -285,8 +323,8 @@ export default function CreatorDatabase() {
                     </div>
                   </td>
                   <td className="px-3 py-3">
-                    {isLocal ? (
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      {isLocal && (
                         <button
                           title="刷新资料"
                           onClick={() => handleRefreshCreator(creator as LocalCreator)}
@@ -295,17 +333,16 @@ export default function CreatorDatabase() {
                         >
                           {refreshing === creator.username ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                         </button>
+                      )}
                         <button
-                          title="删除监控"
-                          onClick={() => handleDeleteCreator(creator as LocalCreator)}
-                          className="w-7 h-7 rounded-md flex items-center justify-center bg-[rgb(28,30,42)] border border-[#2E3045] text-[#8A8FA8] hover:text-red-400 hover:border-red-500/40 transition-colors"
+                        title="删除达人"
+                        onClick={() => handleDeleteCreator(creator)}
+                        disabled={deleting === creator.username}
+                        className="w-7 h-7 rounded-md flex items-center justify-center bg-[rgb(28,30,42)] border border-[#2E3045] text-[#8A8FA8] hover:text-red-400 hover:border-red-500/40 disabled:opacity-50 transition-colors"
                         >
-                          <Trash2 size={13} />
+                        {deleting === creator.username ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                         </button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-[#555873]">-</span>
-                    )}
+                    </div>
                   </td>
                 </tr>
               )
