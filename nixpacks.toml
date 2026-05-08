@@ -1,11 +1,20 @@
 [phases.setup]
 nixPkgs = ["ffmpeg", "yt-dlp"]
+aptPkgs = ["ffmpeg", "python3", "python3-pip", "curl"]
 
 [phases.install]
 cmds = ["npm ci --include=dev"]
 
 [phases.build]
-cmds = ["npm run build"]
+cmds = [
+  "npm run build",
+  "echo '--- Checking tools after build ---'",
+  "sh -c 'command -v ffmpeg || echo \"ffmpeg not in PATH\"'",
+  "sh -c 'command -v yt-dlp || echo \"yt-dlp not in PATH\"'",
+  "sh -c 'ls /app/.nix-profile/bin/ 2>/dev/null || echo \"No .nix-profile/bin\"'",
+  "pip3 install yt-dlp 2>/dev/null || pip install yt-dlp 2>/dev/null || (curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /app/yt-dlp && chmod +x /app/yt-dlp)",
+  "sh -c 'command -v yt-dlp || ls -la /app/yt-dlp 2>/dev/null || echo \"yt-dlp still missing\"'",
+]
 
 [start]
 cmd = "npm start"

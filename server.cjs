@@ -1251,7 +1251,14 @@ app.use((_req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'))
 })
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`✅ TikTok Radar API server on http://localhost:${PORT}`)
   console.log(`   API Key: ${TIKHUB_KEY ? TIKHUB_KEY.substring(0, 8) + '...' : '❌ NOT SET'}`)
+  console.log(`   PATH: ${process.env.PATH}`)
+  const [ytDlpDbg, ffmpegDbg] = await Promise.all([
+    resolveTool('yt-dlp'),
+    resolveTool('ffmpeg'),
+  ])
+  console.log(`   yt-dlp: ${ytDlpDbg || '❌ NOT FOUND'}`)
+  console.log(`   ffmpeg: ${ffmpegDbg || '❌ NOT FOUND'}`)
 })
