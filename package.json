@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "start": "node server.cjs",
     "dev": "concurrently \"nodemon server.cjs\" \"vite\"",
     "server": "node server.cjs",
     "frontend": "vite",

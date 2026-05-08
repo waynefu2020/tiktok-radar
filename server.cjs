@@ -51,7 +51,7 @@ const TOOL_PATHS = {
   'yt-dlp': ['/opt/homebrew/bin/yt-dlp', '/usr/local/bin/yt-dlp', '/usr/bin/yt-dlp'],
 }
 
-app.use(cors())
+app.use(cors({ origin: process.env.ALLOWED_ORIGIN || '*' }))
 app.use(express.json())
 
 const tikhub = axios.create({
