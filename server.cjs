@@ -490,6 +490,23 @@ function commandAvailable(cmd) {
 
 async function resolveTool(cmd) {
   if (await commandAvailable(cmd)) return cmd
+
+  // Try `which` to find the binary in PATH (works on Railway Nix env, Linux, macOS)
+  const whichPath = await new Promise((resolve) => {
+    const child = spawn('which', [cmd], { stdio: 'pipe' })
+    let stdout = ''
+    child.stdout.on('data', (data) => { stdout += data.toString() })
+    child.on('close', (code) => {
+      if (code === 0 && stdout.trim()) {
+        resolve(stdout.trim().split('\n')[0])
+      } else {
+        resolve('')
+      }
+    })
+    child.on('error', () => resolve(''))
+  })
+  if (whichPath && await commandAvailable(whichPath)) return whichPath
+
   for (const candidate of TOOL_PATHS[cmd] || []) {
     if (fs.existsSync(candidate) && await commandAvailable(candidate)) return candidate
   }
@@ -1208,6 +1225,17 @@ app.post('/api/idea-videos/fetch', async (_req, res) => {
     console.error('[IdeaShell] Manual fetch error:', err.message)
     res.status(500).json({ error: err.message || 'Fetch failed' })
   }
+})
+
+// Serve thumbnail files
+app.use('/thumbnails', express.static(THUMBNAILS_DIR))
+
+// Serve frontend static files
+app.use(express.static(path.join(__dirname, 'dist')))
+
+// SPA fallback — must be after all API routes
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'))
 })
 
 app.listen(PORT, () => {
