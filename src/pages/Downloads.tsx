@@ -5,6 +5,7 @@ import AppBadge from '../components/AppBadge'
 import { fmt } from '../components/StatCard'
 import { AppConfig, Video } from '../types'
 import { getApps, getStoredVideos, sortVideosByNewest, syncAndCacheVideos } from '../services/tikhub'
+import { videoThumbnailFallback } from '../utils/media'
 
 export default function Downloads() {
   const [videos, setVideos] = useState<Video[]>([])
@@ -65,10 +66,11 @@ export default function Downloads() {
           {sorted.map(video => (
             <div key={video.id} className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] p-4 flex items-start gap-4">
               <img
-                src={video.thumbnailUrl}
+                src={video.thumbnailUrl || videoThumbnailFallback(video.title)}
                 alt=""
                 className="w-28 h-36 rounded-lg object-cover shrink-0 bg-[rgb(28,30,42)]"
                 loading="lazy"
+                onError={e => { (e.target as HTMLImageElement).src = videoThumbnailFallback(video.title) }}
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2">
@@ -86,14 +88,16 @@ export default function Downloads() {
                   <span>{fmt(video.shares)} 分享</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <a
-                    href={video.thumbnailUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#2E3045] text-[#8A8FA8] hover:text-[#C8CBE0] transition-colors"
-                  >
-                    <Image size={12} /> 打开封面
-                  </a>
+                  {video.thumbnailUrl && (
+                    <a
+                      href={video.thumbnailUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#2E3045] text-[#8A8FA8] hover:text-[#C8CBE0] transition-colors"
+                    >
+                      <Image size={12} /> 打开封面
+                    </a>
+                  )}
                   <a
                     href={video.tiktokUrl}
                     target="_blank"

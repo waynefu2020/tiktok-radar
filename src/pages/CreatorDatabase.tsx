@@ -17,6 +17,7 @@ import {
   saveMonitoredCreator,
   syncAndCacheVideos,
 } from '../services/tikhub'
+import { creatorAvatarFallback } from '../utils/media'
 
 type SortKey = 'followers' | 'totalVideos' | 'avgLikes'
 type LocalCreator = MonitoredCreator
@@ -275,7 +276,7 @@ export default function CreatorDatabase() {
                           src={creator.avatarUrl}
                           alt=""
                           className="w-9 h-9 rounded-full shrink-0 bg-[rgb(28,30,42)]"
-                          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                          onError={e => { (e.target as HTMLImageElement).src = creatorAvatarFallback(creator.username) }}
                         />
                       ) : (
                         <div className="w-9 h-9 rounded-full shrink-0 bg-[rgb(28,30,42)] border border-[#2E3045] flex items-center justify-center text-xs text-[#8A8FA8]">

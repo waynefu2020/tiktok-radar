@@ -18,7 +18,9 @@ db.exec(`
     published_at TEXT NOT NULL,
     likes INTEGER NOT NULL DEFAULT 0,
     payload TEXT NOT NULL,
-    synced_at TEXT NOT NULL
+    synced_at TEXT NOT NULL,
+    is_viral INTEGER NOT NULL DEFAULT 0,
+    notified_at TEXT
   );
 
   CREATE TABLE IF NOT EXISTS monitored_creators (
@@ -61,6 +63,34 @@ db.exec(`
     keywords TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS idea_creators (
+    username TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS idea_videos (
+    id TEXT PRIMARY KEY,
+    creator_username TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    synced_to_feishu INTEGER NOT NULL DEFAULT 0,
+    feishu_record_id TEXT,
+    fetched_at TEXT NOT NULL,
+    synced_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_idea_videos_creator ON idea_videos(creator_username);
+  CREATE INDEX IF NOT EXISTS idx_idea_videos_synced ON idea_videos(synced_to_feishu);
+
+  CREATE TABLE IF NOT EXISTS feishu_sync_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    direction TEXT NOT NULL,
+    record_count INTEGER,
+    status TEXT NOT NULL,
+    detail TEXT,
+    created_at TEXT NOT NULL
+  );
 `)
 
 for (const column of [
@@ -73,6 +103,18 @@ for (const column of [
 ]) {
   try {
     db.exec(`ALTER TABLE video_scripts ADD COLUMN ${column[0]} ${column[1]}`)
+  } catch (err) {
+    if (!String(err.message || '').includes('duplicate column')) throw err
+  }
+}
+
+// 迁移 videos 表添加新列
+for (const column of [
+  ["is_viral", "INTEGER NOT NULL DEFAULT 0"],
+  ["notified_at", "TEXT"],
+]) {
+  try {
+    db.exec(`ALTER TABLE videos ADD COLUMN ${column[0]} ${column[1]}`)
   } catch (err) {
     if (!String(err.message || '').includes('duplicate column')) throw err
   }
@@ -163,24 +205,26 @@ function applyScript(video) {
   const script = db
     .prepare('SELECT script, hook_type, transcript_text, transcript_status, breakdown_json, ai_status, analysis_source, inferred_from FROM video_scripts WHERE video_id = ?')
     .get(video.id)
-  if (!script) return video
+  const viral = db.prepare('SELECT is_viral, notified_at FROM videos WHERE id = ?').get(video.id)
   return {
     ...video,
-    script: script.script || '',
-    hookType: script.hook_type || null,
-    transcriptText: script.transcript_text || '',
-    transcriptStatus: script.transcript_status || 'pending',
-    breakdown: parseJson(script.breakdown_json, null),
-    aiStatus: script.ai_status || 'pending',
-    analysisSource: script.analysis_source || 'transcript',
-    inferredFrom: script.inferred_from || '',
+    script: script?.script || '',
+    hookType: script?.hook_type || null,
+    transcriptText: script?.transcript_text || '',
+    transcriptStatus: script?.transcript_status || 'pending',
+    breakdown: script ? parseJson(script.breakdown_json, null) : video.breakdown,
+    aiStatus: script?.ai_status || 'pending',
+    analysisSource: script?.analysis_source || 'transcript',
+    inferredFrom: script?.inferred_from || '',
+    isViral: viral?.is_viral || 0,
+    notifiedAt: viral?.notified_at || null,
   }
 }
 
 function upsertVideos(videos) {
   const stmt = db.prepare(`
-    INSERT INTO videos (id, app, published_at, likes, payload, synced_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO videos (id, app, published_at, likes, payload, synced_at, is_viral, notified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       app = excluded.app,
       published_at = excluded.published_at,
@@ -199,6 +243,8 @@ function upsertVideos(videos) {
         video.likes || 0,
         JSON.stringify(video),
         syncedAt,
+        video.isViral || 0,
+        video.notifiedAt || null,
       )
     }
     db.exec('COMMIT')
@@ -283,6 +329,31 @@ function getVideoById(videoId) {
   return row ? applyScript(parseJson(row.payload, null)) : null
 }
 
+function markVideoViral(videoId, notifiedAt) {
+  db.prepare('UPDATE videos SET is_viral = 1, notified_at = ? WHERE id = ?').run(notifiedAt, videoId)
+}
+
+function getViralVideos(since) {
+  const rows = since
+    ? db.prepare('SELECT payload FROM videos WHERE is_viral = 1 AND notified_at > ? ORDER BY notified_at DESC').all(since)
+    : db.prepare('SELECT payload FROM videos WHERE is_viral = 1 ORDER BY notified_at DESC').all()
+  return rows.map(row => applyScript(parseJson(row.payload, null)))
+}
+
+function getWeeklyViralReport(weekStart, weekEnd) {
+  const rows = db.prepare(`
+    SELECT payload, app, likes, published_at FROM videos
+    WHERE is_viral = 1 AND notified_at >= ? AND notified_at <= ?
+    ORDER BY likes DESC
+  `).all(weekStart, weekEnd)
+  return rows.map(row => ({
+    ...applyScript(parseJson(row.payload, null)),
+    app: row.app,
+    likes: row.likes,
+    publishedAt: row.published_at,
+  }))
+}
+
 function getMonitoredCreators() {
   return db.prepare('SELECT payload, apps, updated_at FROM monitored_creators ORDER BY updated_at DESC').all()
     .map(row => ({
@@ -350,6 +421,145 @@ function getMeta() {
   return Object.fromEntries(rows.map(row => [row.key, { value: row.value, updatedAt: row.updated_at }]))
 }
 
+// --- idea_creators ---
+
+function getIdeaCreators() {
+  return db.prepare('SELECT payload, updated_at FROM idea_creators ORDER BY updated_at DESC').all()
+    .map(row => ({ ...parseJson(row.payload, {}), updatedAt: row.updated_at }))
+}
+
+function getIdeaCreatorByUsername(username) {
+  const row = db.prepare('SELECT payload, updated_at FROM idea_creators WHERE username = ?').get(String(username).toLowerCase())
+  return row ? { ...parseJson(row.payload, {}), updatedAt: row.updated_at } : null
+}
+
+function saveIdeaCreator(creator) {
+  const username = String(creator.username || '').toLowerCase()
+  const updatedAt = nowIso()
+  db.prepare(`
+    INSERT INTO idea_creators (username, payload, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET
+      payload = excluded.payload,
+      updated_at = excluded.updated_at
+  `).run(username, JSON.stringify(creator), updatedAt)
+  return { ...creator, updatedAt }
+}
+
+function deleteIdeaCreator(username) {
+  const normalized = String(username || '').trim().replace(/^@/, '').toLowerCase()
+  db.prepare('DELETE FROM idea_videos WHERE creator_username = ?').run(normalized)
+  db.prepare('DELETE FROM idea_creators WHERE username = ?').run(normalized)
+  return true
+}
+
+// --- idea_videos ---
+
+function upsertIdeaVideos(videos) {
+  const stmt = db.prepare(`
+    INSERT INTO idea_videos (id, creator_username, payload, synced_to_feishu, feishu_record_id, fetched_at, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      creator_username = excluded.creator_username,
+      payload = excluded.payload,
+      fetched_at = excluded.fetched_at
+  `)
+  const fetchedAt = nowIso()
+  db.exec('BEGIN')
+  try {
+    for (const video of videos) {
+      const existing = db.prepare('SELECT synced_to_feishu, feishu_record_id, synced_at FROM idea_videos WHERE id = ?').get(video.id)
+      stmt.run(
+        video.id,
+        String(video.creator?.username || '').toLowerCase(),
+        JSON.stringify(video),
+        existing?.synced_to_feishu ?? 0,
+        existing?.feishu_record_id ?? null,
+        fetchedAt,
+        existing?.synced_at ?? null,
+      )
+    }
+    db.exec('COMMIT')
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+  return fetchedAt
+}
+
+function getIdeaVideos(opts = {}) {
+  const { creator, unsynced, limit } = opts
+  let sql = 'SELECT payload, synced_to_feishu, feishu_record_id, fetched_at, synced_at FROM idea_videos'
+  const conditions = []
+  const params = []
+  if (creator) {
+    conditions.push('creator_username = ?')
+    params.push(String(creator).toLowerCase())
+  }
+  if (unsynced) {
+    conditions.push('synced_to_feishu = 0')
+  }
+  if (conditions.length) {
+    sql += ' WHERE ' + conditions.join(' AND ')
+  }
+  const rows = db.prepare(sql).all(...params)
+  const videos = rows.map(row => ({
+    ...parseJson(row.payload, null),
+    syncedToFeishu: row.synced_to_feishu,
+    feishuRecordId: row.feishu_record_id,
+    fetchedAt: row.fetched_at,
+    syncedAt: row.synced_at,
+  })).filter(Boolean)
+
+  sortVideosByNewest(videos)
+  return limit ? videos.slice(0, limit) : videos
+}
+
+function getIdeaVideoById(videoId) {
+  const row = db.prepare('SELECT payload, synced_to_feishu, feishu_record_id, fetched_at, synced_at FROM idea_videos WHERE id = ?').get(videoId)
+  return row ? {
+    ...parseJson(row.payload, null),
+    syncedToFeishu: row.synced_to_feishu,
+    feishuRecordId: row.feishu_record_id,
+    fetchedAt: row.fetched_at,
+    syncedAt: row.synced_at,
+  } : null
+}
+
+function markIdeaVideosSynced(videoIds, recordIdsMap) {
+  const stmt = db.prepare(`
+    UPDATE idea_videos
+    SET synced_to_feishu = 1, feishu_record_id = ?, synced_at = ?
+    WHERE id = ?
+  `)
+  const syncedAt = nowIso()
+  db.exec('BEGIN')
+  try {
+    for (const videoId of videoIds) {
+      stmt.run(recordIdsMap[videoId] || null, syncedAt, videoId)
+    }
+    db.exec('COMMIT')
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+}
+
+// --- feishu_sync_logs ---
+
+function saveFeishuSyncLog({ direction, recordCount, status, detail }) {
+  const createdAt = nowIso()
+  db.prepare(`
+    INSERT INTO feishu_sync_logs (direction, record_count, status, detail, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(direction, recordCount || 0, status, detail || '', createdAt)
+  return { direction, recordCount, status, detail, createdAt }
+}
+
+function getFeishuSyncLogs(limit = 20) {
+  return db.prepare('SELECT * FROM feishu_sync_logs ORDER BY created_at DESC LIMIT ?').all(limit)
+}
+
 module.exports = {
   DB_PATH,
   deleteApp,
@@ -358,10 +568,14 @@ module.exports = {
   getAppById,
   getApps,
   getMeta,
+  setMeta,
   getMonitoredCreators,
   getVideoById,
   getVideos,
   getVideoScripts,
+  getViralVideos,
+  getWeeklyViralReport,
+  markVideoViral,
   replaceAppVideos,
   saveApp,
   hideCreator,
@@ -369,4 +583,15 @@ module.exports = {
   saveVideoScript,
   sortVideosByNewest,
   upsertVideos,
+  // ideaShell
+  getIdeaCreators,
+  getIdeaCreatorByUsername,
+  saveIdeaCreator,
+  deleteIdeaCreator,
+  upsertIdeaVideos,
+  getIdeaVideos,
+  getIdeaVideoById,
+  markIdeaVideosSynced,
+  saveFeishuSyncLog,
+  getFeishuSyncLogs,
 }

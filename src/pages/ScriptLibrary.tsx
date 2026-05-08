@@ -5,6 +5,7 @@ import AppBadge from '../components/AppBadge'
 
 import { AppId, AppConfig, ScriptBreakdown, Video } from '../types'
 import { applySavedScripts, getApps, getStoredVideos, saveVideoScript, syncAndCacheVideos } from '../services/tikhub'
+import { videoThumbnailFallback } from '../utils/media'
 
 const HOOK_LABELS: Record<string, { label: string; color: string }> = {
   question:  { label: '疑问式', color: '#6366F1' },
@@ -75,6 +76,7 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
   const [noteText, setNoteText] = useState(video.script ?? '')
   const [hookType, setHookType] = useState<Video['hookType']>(video.hookType)
   const [copied, setCopied] = useState(false)
+  const thumbnailSrc = video.thumbnailUrl || videoThumbnailFallback(video.title)
 
   const handleCopy = () => {
     const text = video.transcriptText || video.script || ''
@@ -101,13 +103,12 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
         onClick={() => setExpanded(!expanded)}
       >
         <div className="w-20 h-11 rounded-lg shrink-0 bg-[rgb(28,30,42)] overflow-hidden">
-          {video.thumbnailUrl ? (
-            <img src={video.thumbnailUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-[#555873]">
-              <FileText size={15} />
-            </div>
-          )}
+          <img
+            src={thumbnailSrc}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={e => { (e.target as HTMLImageElement).src = videoThumbnailFallback(video.title) }}
+          />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2 mb-1.5">

@@ -14,17 +14,28 @@ const {
   getAppById,
   getApps,
   getMeta,
+  setMeta,
   getMonitoredCreators,
   getVideoById,
   getVideos,
   getVideoScripts,
+  getViralVideos,
+  getWeeklyViralReport,
   hideCreator,
+  markVideoViral,
   replaceAppVideos,
   saveApp,
   saveMonitoredCreator,
   saveVideoScript,
   sortVideosByNewest,
   upsertVideos,
+  // ideaShell
+  getIdeaCreators,
+  saveIdeaCreator,
+  deleteIdeaCreator,
+  getIdeaVideos,
+  upsertIdeaVideos,
+  getIdeaVideoById,
 } = require('./db.cjs')
 
 const app = express()
@@ -54,6 +65,29 @@ const aiClient = axios.create({
   headers: AI_API_KEY ? { Authorization: `Bearer ${AI_API_KEY}` } : {},
   timeout: 60000,
 })
+
+function normalizeIdeaCreatorProfile(payload, fallbackUsername = '') {
+  const data = payload?.data || payload || {}
+  const user = data.user || data.user_info || data
+  const stats = data.stats || data.userInfo?.stats || user.stats || {}
+  const username = user.unique_id || user.uniqueId || fallbackUsername
+
+  return {
+    id: `creator_${user.uid || user.id || user.user_id || username}`,
+    username,
+    secUid: user.sec_uid || user.secUid || '',
+    displayName: user.nickname || user.display_name || username,
+    avatarUrl:
+      firstUrl(user.avatar_thumb?.url_list) ||
+      firstUrl(user.avatar_medium?.url_list) ||
+      firstUrl(user.avatar_larger?.url_list) ||
+      '',
+    followers: user.follower_count ?? stats.follower_count ?? 0,
+    totalVideos: user.aweme_count ?? stats.video_count ?? 0,
+    avgLikes: 0,
+    apps: ['ideashell'],
+  }
+}
 
 // 动态加载竞品配置
 function getAppKeywords() {
@@ -201,6 +235,146 @@ function tiktokAwemeId(videoId) {
   return String(videoId || '').replace(/^tk_/, '')
 }
 
+function normalizeIdeaVideo(aweme) {
+  const stats = aweme.statistics || aweme.stats || {}
+  const author = aweme.author || {}
+  const video = aweme.video || {}
+
+  const coverUrls =
+    video.cover?.url_list ||
+    video.dynamic_cover?.url_list ||
+    video.origin_cover?.url_list ||
+    []
+  const coverUrl = coverUrls[0] || ''
+
+  const avatarUrls =
+    author.avatar_thumb?.url_list ||
+    author.avatar_medium?.url_list ||
+    []
+  const avatarUrl = avatarUrls[0] || ''
+
+  const tags = (aweme.text_extra || aweme.cha_list || [])
+    .filter(t => t.hashtag_name || t.cha_name)
+    .map(t => t.hashtag_name || t.cha_name)
+    .filter(Boolean)
+    .slice(0, 6)
+
+  return {
+    id: `tk_${aweme.aweme_id}`,
+    title: aweme.desc || '(无标题)',
+    thumbnailUrl: coverUrl,
+    tiktokUrl: `https://www.tiktok.com/@${author.unique_id}/video/${aweme.aweme_id}`,
+    app: 'ideashell',
+    creator: {
+      id: `creator_${author.uid || author.unique_id}`,
+      username: author.unique_id || 'unknown',
+      displayName: author.nickname || author.unique_id || 'Unknown',
+      avatarUrl,
+      followers: author.follower_count || 0,
+      totalVideos: 1,
+      avgLikes: stats.digg_count || 0,
+      apps: ['ideashell'],
+    },
+    publishedAt: aweme.create_time
+      ? new Date(aweme.create_time * 1000).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0],
+    likes: stats.digg_count || 0,
+    comments: stats.comment_count || 0,
+    saves: stats.collect_count || 0,
+    shares: stats.share_count || 0,
+    views: stats.play_count || 0,
+    tags,
+  }
+}
+
+async function fetchIdeaUserPostedVideos({ uniqueId, secUserId, maxCursor = 0, sortType = 0, count = 20 }) {
+  const res = await tikhub.get('/api/v1/tiktok/app/v3/fetch_user_post_videos_v3', {
+    params: {
+      unique_id: uniqueId || undefined,
+      sec_user_id: secUserId || undefined,
+      max_cursor: maxCursor,
+      sort_type: sortType,
+      count,
+    },
+  })
+  const data = res.data?.data
+  const items = data?.aweme_list || data?.video_list || []
+  const videos = items
+    .filter(item => item && item.aweme_id)
+    .map(item => normalizeIdeaVideo(item))
+  return {
+    videos,
+    maxCursor: data?.max_cursor || 0,
+    hasMore: data?.has_more || false,
+  }
+}
+
+async function fetchAllIdeaVideosForCreator(creator, limit = 20) {
+  const all = []
+  let maxCursor = 0
+  let hasMore = true
+  let rounds = 0
+
+  while (hasMore && all.length < limit && rounds < 5) {
+    const result = await fetchIdeaUserPostedVideos({
+      uniqueId: creator.username,
+      secUserId: creator.secUid,
+      maxCursor,
+      sortType: 0,
+      count: Math.min(limit, 20),
+    })
+    all.push(...result.videos)
+    maxCursor = result.maxCursor
+    hasMore = result.hasMore
+    rounds += 1
+  }
+
+  return all.slice(0, limit)
+}
+
+async function syncIdeaVideosForCreators(creators, limit = 20) {
+  let fetched = 0
+  const allVideos = []
+  const errors = []
+
+  for (const creator of creators) {
+    const username = String(creator?.username || '').trim()
+    if (!username) continue
+    try {
+      const videos = await fetchAllIdeaVideosForCreator(creator, limit)
+      fetched += videos.length
+      allVideos.push(...videos)
+    } catch (err) {
+      errors.push({ username, error: err.message || 'Fetch failed' })
+      console.error(`[IdeaShell] Failed to fetch videos for ${username}:`, err.message)
+    }
+  }
+
+  const deduped = []
+  const seen = new Set()
+  for (const video of allVideos) {
+    if (seen.has(video.id)) continue
+    seen.add(video.id)
+    deduped.push(video)
+  }
+
+  let newVideos = 0
+  for (const video of deduped) {
+    if (!getIdeaVideoById(video.id)) newVideos += 1
+  }
+
+  if (deduped.length) {
+    upsertIdeaVideos(deduped)
+  }
+
+  return {
+    creatorCount: creators.length,
+    fetched,
+    newVideos,
+    errors,
+  }
+}
+
 function collectTranscriptCandidates(value, results = []) {
   if (!value) return results
   if (typeof value === 'string') {
@@ -281,6 +455,9 @@ async function fetchTranscriptFromTikHub(video) {
 const TEMP_DIR = path.join(__dirname, 'temp')
 fs.mkdirSync(TEMP_DIR, { recursive: true })
 
+const THUMBNAILS_DIR = path.join(__dirname, 'public', 'thumbnails')
+fs.mkdirSync(THUMBNAILS_DIR, { recursive: true })
+
 function runCommand(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -319,13 +496,57 @@ async function resolveTool(cmd) {
   return ''
 }
 
+function isViralVideo(video) {
+  const likes = video.likes || 0
+  const views = video.views || 0
+  const engagementRate = views > 0 ? likes / views : 0
+  return likes >= 10000 && engagementRate > 0.05
+}
+
+async function downloadThumbnail(videoId, thumbnailUrl) {
+  if (!thumbnailUrl || !thumbnailUrl.startsWith('http')) return thumbnailUrl
+
+  const ext = thumbnailUrl.match(/\.([^.?]+)(?:\?|$)/)?.[1] || 'jpg'
+  const localPath = path.join(THUMBNAILS_DIR, `${videoId}.${ext}`)
+  const publicPath = `/thumbnails/${path.basename(localPath)}`
+
+  if (fs.existsSync(localPath)) return publicPath
+
+  try {
+    const resp = await axios.get(thumbnailUrl, { responseType: 'arraybuffer', timeout: 15000 })
+    fs.writeFileSync(localPath, resp.data)
+    console.log(`[Thumbnail] Downloaded: ${publicPath}`)
+    return publicPath
+  } catch (err) {
+    console.warn(`[Thumbnail] Failed to download ${videoId}:`, err.message)
+    return thumbnailUrl
+  }
+}
+
+async function downloadVideoFromUrl(sourceUrl, targetPath) {
+  const response = await axios.get(sourceUrl, {
+    responseType: 'stream',
+    timeout: 60000,
+    maxRedirects: 5,
+  })
+
+  await new Promise((resolve, reject) => {
+    const writer = fs.createWriteStream(targetPath)
+    response.data.pipe(writer)
+    writer.on('finish', resolve)
+    writer.on('error', reject)
+    response.data.on('error', reject)
+  })
+}
+
 async function downloadAndTranscribe(video) {
-  const [ytDlpPath, ffmpegPath] = await Promise.all([
-    resolveTool('yt-dlp'),
-    resolveTool('ffmpeg'),
-  ])
-  if (!ytDlpPath || !ffmpegPath) {
-    console.warn('[ASR] Skipped: yt-dlp or ffmpeg is not available')
+  const [ytDlpPath, ffmpegPath] = await Promise.all([resolveTool('yt-dlp'), resolveTool('ffmpeg')])
+  if (!ffmpegPath) {
+    console.warn('[ASR] Skipped: ffmpeg is not available')
+    return ''
+  }
+  if (!video.videoUrl && !ytDlpPath) {
+    console.warn('[ASR] Skipped: neither TikHub videoUrl nor yt-dlp is available')
     return ''
   }
 
@@ -334,17 +555,32 @@ async function downloadAndTranscribe(video) {
   const audioPath = path.join(TEMP_DIR, `${videoId}.mp3`)
 
   try {
-    // 1. 下载视频（使用 yt-dlp）
-    console.log(`[ASR] Downloading video: ${video.tiktokUrl}`)
-    await runCommand(ytDlpPath, [
-      '--no-warnings',
-      '-o', videoPath,
-      '-S', 'ext:mp4',
-      '--no-playlist',
-      video.tiktokUrl,
-    ], { timeout: 60000 })
+    // 1. 下载视频：优先使用 TikHub 返回的视频直链，失败时回退到 yt-dlp 抓取页面
+    let downloaded = false
 
-    if (!fs.existsSync(videoPath)) {
+    if (video.videoUrl) {
+      try {
+        console.log(`[ASR] Downloading video from TikHub URL: ${video.videoUrl}`)
+        await downloadVideoFromUrl(video.videoUrl, videoPath)
+        downloaded = fs.existsSync(videoPath)
+      } catch (err) {
+        console.warn(`[ASR] Direct video download failed for ${videoId}:`, err.message)
+      }
+    }
+
+    if (!downloaded && ytDlpPath) {
+      console.log(`[ASR] Falling back to yt-dlp: ${video.tiktokUrl}`)
+      await runCommand(ytDlpPath, [
+        '--no-warnings',
+        '-o', videoPath,
+        '-S', 'ext:mp4',
+        '--no-playlist',
+        video.tiktokUrl,
+      ], { timeout: 60000 })
+      downloaded = fs.existsSync(videoPath)
+    }
+
+    if (!downloaded || !fs.existsSync(videoPath)) {
       throw new Error('Video download failed: file not created')
     }
 
@@ -713,12 +949,34 @@ async function syncAppVideos(appId, count = 20) {
   }
 
   sortVideosByNewest(allVideos)
+
+  // 下载封面图到本地
+  for (const video of allVideos) {
+    if (video.thumbnailUrl && video.thumbnailUrl.startsWith('http')) {
+      video.thumbnailUrl = await downloadThumbnail(video.id, video.thumbnailUrl)
+    }
+  }
+
+  // 检测爆款视频
+  const now = new Date().toISOString()
+  const newViralVideos = []
+  for (const video of allVideos) {
+    if (isViralVideo(video)) {
+      video.isViral = 1
+      video.notifiedAt = now
+      markVideoViral(video.id, now)
+      newViralVideos.push(video)
+      console.log(`[Viral] ${video.title} - ${video.likes} likes (${video.app})`)
+    }
+  }
+
   replaceAppVideos(appId, allVideos)
 
   return {
     appId,
     total: allVideos.length,
     videos: getVideos().filter(v => v.app === appId),
+    newViralCount: newViralVideos.length,
     errors: errors.length ? errors : undefined,
   }
 }
@@ -789,6 +1047,45 @@ app.delete('/api/apps/:id', (req, res) => {
   res.json({ ok: true })
 })
 
+// 获取爆款视频（用于轮询通知）
+app.get('/api/viral-videos', (req, res) => {
+  const since = req.query.since || null
+  const videos = getViralVideos(since)
+  res.json({ total: videos.length, videos })
+})
+
+// 获取周报
+app.get('/api/weekly-report', (req, res) => {
+  const now = new Date()
+  const dayOfWeek = now.getDay()
+  // 上周五到本周四
+  const daysToThursday = (dayOfWeek + 2) % 7
+  const lastThursday = new Date(now)
+  lastThursday.setDate(now.getDate() - daysToThursday)
+  lastThursday.setHours(23, 59, 59, 999)
+
+  const lastFriday = new Date(lastThursday)
+  lastFriday.setDate(lastThursday.getDate() - 6)
+  lastFriday.setHours(0, 0, 0, 0)
+
+  const weekStart = lastFriday.toISOString()
+  const weekEnd = lastThursday.toISOString()
+
+  const videos = getWeeklyViralReport(weekStart, weekEnd)
+  const byApp = {}
+  for (const v of videos) {
+    byApp[v.app] = (byApp[v.app] || 0) + 1
+  }
+
+  res.json({
+    weekStart: weekStart.split('T')[0],
+    weekEnd: weekEnd.split('T')[0],
+    viralCount: videos.length,
+    topVideos: videos.slice(0, 10),
+    byApp,
+  })
+})
+
 // 健康检查
 app.get('/api/health', async (_req, res) => {
   const [ytDlpPath, ffmpegPath] = await Promise.all([
@@ -809,6 +1106,108 @@ app.get('/api/health', async (_req, res) => {
     dbPath: DB_PATH,
     apps: getApps().length,
   })
+})
+
+// ========== ideaShell UGC 路由 ==========
+
+// 获取 ideaShell 博主列表
+app.get('/api/idea-creators', (_req, res) => {
+  res.json({ creators: getIdeaCreators() })
+})
+
+// 添加 ideaShell 博主
+app.post('/api/idea-creators', async (req, res) => {
+  const rawUsername = String(req.body?.username || '').trim()
+  const username = rawUsername
+    .replace(/^@/, '')
+    .replace(/^https?:\/\/(www\.)?tiktok\.com\/@/i, '')
+    .split(/[/?#]/)[0]
+
+  if (!username) return res.status(400).json({ error: 'Missing username' })
+
+  try {
+    const resp = await tikhub.get('/api/v1/tiktok/app/v3/handler_user_profile', {
+      params: { unique_id: username },
+    })
+    const creator = normalizeIdeaCreatorProfile(resp.data, username)
+    const saved = saveIdeaCreator(creator)
+    const fetchResult = await syncIdeaVideosForCreators([saved])
+    res.json({ creator: saved, fetchResult })
+  } catch (err) {
+    const detail = err.response?.data?.detail || err.response?.data?.message || err.message
+    console.error(`[TikHub] Idea creator error for "${username}":`, detail)
+    res.status(err.response?.status || 500).json({
+      error: String(err.response?.data?.detail?.message || detail || 'Failed to fetch creator'),
+    })
+  }
+})
+
+// 删除 ideaShell 博主
+app.delete('/api/idea-creators/:username', (req, res) => {
+  deleteIdeaCreator(req.params.username)
+  res.json({ ok: true })
+})
+
+// 刷新 ideaShell 博主资料
+app.post('/api/idea-creators/:username/refresh', async (req, res) => {
+  const username = String(req.params.username || '').trim().replace(/^@/, '').split(/[/?#]/)[0]
+  if (!username) return res.status(400).json({ error: 'Missing username' })
+
+  try {
+    const resp = await tikhub.get('/api/v1/tiktok/app/v3/handler_user_profile', {
+      params: { unique_id: username },
+    })
+    const creator = normalizeIdeaCreatorProfile(resp.data, username)
+    const saved = saveIdeaCreator(creator)
+    const fetchResult = await syncIdeaVideosForCreators([saved])
+    res.json({ creator: saved, fetchResult })
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Refresh failed' })
+  }
+})
+
+// 获取 ideaShell 视频
+app.get('/api/idea-videos', (req, res) => {
+  const options = {}
+  if (req.query.creator) options.creator = req.query.creator
+  if (req.query.limit) options.limit = parseInt(req.query.limit)
+  res.json({ videos: getIdeaVideos(options) })
+})
+
+// 首屏自动补抓已有博主的视频
+app.post('/api/idea-videos/backfill', async (_req, res) => {
+  try {
+    const creators = getIdeaCreators()
+    if (!creators.length) {
+      return res.json({ creatorCount: 0, fetched: 0, newVideos: 0, errors: [], message: '没有可抓取的博主' })
+    }
+    const result = await syncIdeaVideosForCreators(creators)
+    res.json({
+      ...result,
+      message: `已检查 ${result.creatorCount} 位博主，抓取 ${result.fetched} 条视频，新增 ${result.newVideos} 条`,
+    })
+  } catch (err) {
+    console.error('[IdeaShell] Backfill error:', err.message)
+    res.status(500).json({ error: err.message || 'Backfill failed' })
+  }
+})
+
+// 手动抓取全部博主视频
+app.post('/api/idea-videos/fetch', async (_req, res) => {
+  try {
+    const creators = getIdeaCreators()
+    if (!creators.length) {
+      return res.json({ creatorCount: 0, fetched: 0, newVideos: 0, errors: [], message: '没有可抓取的博主' })
+    }
+    const result = await syncIdeaVideosForCreators(creators)
+    res.json({
+      ...result,
+      message: `已检查 ${result.creatorCount} 位博主，抓取 ${result.fetched} 条视频，新增 ${result.newVideos} 条`,
+    })
+  } catch (err) {
+    console.error('[IdeaShell] Manual fetch error:', err.message)
+    res.status(500).json({ error: err.message || 'Fetch failed' })
+  }
 })
 
 app.listen(PORT, () => {

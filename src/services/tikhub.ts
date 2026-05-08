@@ -239,3 +239,29 @@ export async function fetchCreator(username: string): Promise<Creator> {
   const data = await res.json()
   return data.creator
 }
+
+export interface ViralVideosResponse {
+  total: number
+  videos: Video[]
+}
+
+export interface WeeklyReport {
+  weekStart: string
+  weekEnd: string
+  viralCount: number
+  topVideos: Video[]
+  byApp: Record<string, number>
+}
+
+export async function getViralVideos(since?: string): Promise<ViralVideosResponse> {
+  const url = since ? `/api/viral-videos?since=${encodeURIComponent(since)}` : '/api/viral-videos'
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Get viral videos failed: HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function getWeeklyReport(): Promise<WeeklyReport> {
+  const res = await fetch('/api/weekly-report')
+  if (!res.ok) throw new Error(`Get weekly report failed: HTTP ${res.status}`)
+  return res.json()
+}

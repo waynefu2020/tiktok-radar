@@ -7,6 +7,7 @@ import AppBadge from '../components/AppBadge'
 import { AppId, AppConfig, ScriptBreakdown, Video } from '../types'
 import { Video as VideoIcon, Users, Flame, Heart as HeartIcon } from 'lucide-react'
 import { analyzeVideoScript, getApps, getHealth, getStoredVideos, sortVideosByNewest, syncAll, syncApp } from '../services/tikhub'
+import { creatorAvatarFallback, videoThumbnailFallback } from '../utils/media'
 
 const TIME_FILTERS = [
   { label: '最近7天', days: 7 },
@@ -86,6 +87,8 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
   const [scriptVideo, setScriptVideo] = useState(video)
   const [loadingScript, setLoadingScript] = useState(false)
   const [scriptError, setScriptError] = useState('')
+  const thumbnailSrc = video.thumbnailUrl || videoThumbnailFallback(video.title)
+  const avatarSrc = video.creator.avatarUrl || creatorAvatarFallback(video.creator.username)
 
   const handleToggleScript = async () => {
     const nextExpanded = !expanded
@@ -110,13 +113,13 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
         <td className="px-4 py-3 w-[42%]">
           <div className="flex items-start gap-3">
             <div className="w-16 h-9 rounded overflow-hidden shrink-0 bg-[rgb(28,30,42)]">
-              {video.thumbnailUrl ? (
-                <img src={video.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#555873]">
-                  <VideoIcon size={15} />
-                </div>
-              )}
+              <img
+                src={thumbnailSrc}
+                alt=""
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={e => { (e.target as HTMLImageElement).src = videoThumbnailFallback(video.title) }}
+              />
             </div>
             <div className="flex-1 min-w-0">
               <a
@@ -139,13 +142,12 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
         <td className="px-3 py-3 w-[10%]"><AppBadge app={video.app} configs={appConfigs} /></td>
         <td className="px-3 py-3 w-[12%]">
           <div className="flex items-center gap-2">
-            {video.creator.avatarUrl ? (
-              <img src={video.creator.avatarUrl} alt="" className="w-6 h-6 rounded-full shrink-0 bg-[rgb(28,30,42)]" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-            ) : (
-              <div className="w-6 h-6 rounded-full shrink-0 bg-[rgb(28,30,42)] border border-[#2E3045] flex items-center justify-center text-[10px] text-[#8A8FA8]">
-                {video.creator.username.slice(0, 1).toUpperCase()}
-              </div>
-            )}
+            <img
+              src={avatarSrc}
+              alt=""
+              className="w-6 h-6 rounded-full shrink-0 bg-[rgb(28,30,42)]"
+              onError={e => { (e.target as HTMLImageElement).src = creatorAvatarFallback(video.creator.username) }}
+            />
             <span className="text-xs text-[#C8CBE0] truncate">@{video.creator.username}</span>
           </div>
         </td>
