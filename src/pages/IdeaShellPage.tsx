@@ -348,90 +348,106 @@ export default function IdeaShellPage() {
     <div className="p-6">
       <TopBar title="ideaShell UGC" subtitle={subtitle} />
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-[#8A8FA8]">
-        <div className="flex items-center gap-2">
-          <Eye size={12} className="text-[#8A8FA8]" />
-          <span>总播放量</span>
-          <span className="text-[#C8CBE0] font-medium">{fmt(headlineStats.totalViews)}</span>
+      {/* 核心指标卡片 */}
+      <div className="mt-4 grid grid-cols-3 gap-3">
+        <div className="rounded-xl bg-[rgb(18,20,28)] border border-[#2E3045] px-4 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
+            <Eye size={15} className="text-sky-400" />
+          </div>
+          <div>
+            <div className="text-[11px] text-[#8A8FA8]">总播放量</div>
+            <div className="text-base font-semibold text-white leading-tight">{fmt(headlineStats.totalViews)}</div>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Activity size={12} className="text-[#8A8FA8]" />
-          <span>总互动量</span>
-          <span className="text-[#C8CBE0] font-medium">{fmt(headlineStats.totalEngagements)}</span>
+        <div className="rounded-xl bg-[rgb(18,20,28)] border border-[#2E3045] px-4 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+            <Activity size={15} className="text-violet-400" />
+          </div>
+          <div>
+            <div className="text-[11px] text-[#8A8FA8]">总互动量</div>
+            <div className="text-base font-semibold text-white leading-tight">{fmt(headlineStats.totalEngagements)}</div>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Heart size={12} className="text-rose-400" />
-          <span>平均互动率</span>
-          <span className="text-[#C8CBE0] font-medium">{headlineStats.averageEngagementRate.toFixed(1)}%</span>
+        <div className="rounded-xl bg-[rgb(18,20,28)] border border-[#2E3045] px-4 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0">
+            <Heart size={15} className="text-rose-400" />
+          </div>
+          <div>
+            <div className="text-[11px] text-[#8A8FA8]">平均互动率</div>
+            <div className="text-base font-semibold text-white leading-tight">{headlineStats.averageEngagementRate.toFixed(1)}%</div>
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 mt-5 mb-4">
-        <button className={`filter-btn${tab === 'creators' ? ' active' : ''}`} onClick={() => setTab('creators')}>
-          <Users size={12} className="inline mr-1" />
-          博主管理
-        </button>
-        <button className={`filter-btn${tab === 'videos' ? ' active' : ''}`} onClick={() => setTab('videos')}>
-          <Video size={12} className="inline mr-1" />
-          视频列表
-        </button>
-      </div>
+      {/* Tab 栏 + 操作按钮同行 */}
+      <div className="flex items-center justify-between mt-5 mb-4">
+        <div className="flex items-center gap-2">
+          <button className={`filter-btn${tab === 'creators' ? ' active' : ''}`} onClick={() => setTab('creators')}>
+            <Users size={12} className="inline mr-1" />
+            博主管理
+          </button>
+          <button className={`filter-btn${tab === 'videos' ? ' active' : ''}`} onClick={() => setTab('videos')}>
+            <Video size={12} className="inline mr-1" />
+            视频列表
+          </button>
+        </div>
 
-      <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <button
-          onClick={handleFetchAll}
-          disabled={fetchingAll || !hasCreators}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {fetchingAll ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          抓取全部博主视频
-        </button>
-
-        {backfilling && (
-          <div className="flex items-center gap-1.5 text-xs text-[#818CF8]">
-            <Loader2 size={12} className="animate-spin" />
-            正在自动补抓已有博主视频…
-          </div>
-        )}
-
-        {statusMessage && (
-          <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-            <CheckCircle2 size={12} />
-            {statusMessage}
-          </div>
-        )}
-
-        {fetchError && (
-          <div className="flex items-center gap-1.5 text-xs text-red-400">
-            <AlertCircle size={12} />
-            {fetchError}
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {backfilling && (
+            <div className="flex items-center gap-1.5 text-xs text-[#818CF8]">
+              <Loader2 size={12} className="animate-spin" />
+              正在自动补抓…
+            </div>
+          )}
+          {statusMessage && (
+            <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+              <CheckCircle2 size={12} />
+              {statusMessage}
+            </div>
+          )}
+          {fetchError && (
+            <div className="flex items-center gap-1.5 text-xs text-red-400">
+              <AlertCircle size={12} />
+              {fetchError}
+            </div>
+          )}
+          <button
+            onClick={handleFetchAll}
+            disabled={fetchingAll || !hasCreators}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {fetchingAll ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            抓取全部博主视频
+          </button>
+        </div>
       </div>
 
       {tab === 'creators' && (
-        <div className="space-y-4">
-          <form onSubmit={handleAdd} className="flex items-center gap-2">
-            <input
-              value={usernameInput}
-              onChange={e => setUsernameInput(e.target.value)}
-              placeholder="输入 TikTok 账号或主页链接"
-              className="flex-1 max-w-md bg-[rgb(18,20,28)] border border-[#2E3045] rounded-lg px-3 py-2 text-sm text-[#C8CBE0] placeholder-[#555873] focus:outline-none focus:border-[#6366F1]/50"
-            />
-            <button
-              type="submit"
-              disabled={adding}
-              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.12)] text-[#C8CBE0] hover:bg-[rgba(99,102,241,0.2)] disabled:opacity-50 transition-colors"
-            >
-              {adding ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-              添加博主
-            </button>
-          </form>
-          {addError && (
-            <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 max-w-md">
-              <AlertCircle size={13} />{addError}
-            </div>
-          )}
+        <div className="space-y-3">
+          {/* 添加博主表单 */}
+          <div className="rounded-xl border border-[#2E3045] bg-[rgb(18,20,28)] px-4 py-3">
+            <form onSubmit={handleAdd} className="flex items-center gap-2">
+              <input
+                value={usernameInput}
+                onChange={e => setUsernameInput(e.target.value)}
+                placeholder="输入 TikTok 账号或主页链接"
+                className="flex-1 bg-[rgb(12,14,20)] border border-[#2E3045] rounded-lg px-3 py-2 text-sm text-[#C8CBE0] placeholder-[#555873] focus:outline-none focus:border-[#6366F1]/50"
+              />
+              <button
+                type="submit"
+                disabled={adding}
+                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.12)] text-[#C8CBE0] hover:bg-[rgba(99,102,241,0.2)] disabled:opacity-50 transition-colors whitespace-nowrap"
+              >
+                {adding ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                添加博主
+              </button>
+            </form>
+            {addError && (
+              <div className="flex items-center gap-2 text-xs text-red-400 mt-2">
+                <AlertCircle size={13} />{addError}
+              </div>
+            )}
+          </div>
 
           <div className="rounded-xl border border-[#2E3045] overflow-hidden bg-[rgb(12,14,20)]">
             <table className="w-full">
