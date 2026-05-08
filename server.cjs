@@ -47,8 +47,21 @@ const AI_API_KEY = process.env.AI_API_KEY
 const AI_MODEL = process.env.AI_MODEL || 'gpt-5.4'
 const FALLBACK_IMAGE = ''
 const TOOL_PATHS = {
-  'ffmpeg': ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'],
-  'yt-dlp': ['/opt/homebrew/bin/yt-dlp', '/usr/local/bin/yt-dlp', '/usr/bin/yt-dlp'],
+  'ffmpeg': [
+    '/opt/homebrew/bin/ffmpeg',
+    '/usr/local/bin/ffmpeg',
+    '/usr/bin/ffmpeg',
+    '/app/.nix-profile/bin/ffmpeg',
+    '/nix/var/nix/profiles/default/bin/ffmpeg',
+  ],
+  'yt-dlp': [
+    '/opt/homebrew/bin/yt-dlp',
+    '/usr/local/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+    '/app/.nix-profile/bin/yt-dlp',
+    '/nix/var/nix/profiles/default/bin/yt-dlp',
+    '/app/yt-dlp',
+  ],
 }
 
 app.use(cors({ origin: process.env.ALLOWED_ORIGIN || '*' }))
@@ -491,9 +504,9 @@ function commandAvailable(cmd) {
 async function resolveTool(cmd) {
   if (await commandAvailable(cmd)) return cmd
 
-  // Try `which` to find the binary in PATH (works on Railway Nix env, Linux, macOS)
-  const whichPath = await new Promise((resolve) => {
-    const child = spawn('which', [cmd], { stdio: 'pipe' })
+  // Try `sh -c "command -v"` to find the binary in PATH (more portable than `which`)
+  const pathFromShell = await new Promise((resolve) => {
+    const child = spawn('sh', ['-c', `command -v ${cmd}`], { stdio: 'pipe' })
     let stdout = ''
     child.stdout.on('data', (data) => { stdout += data.toString() })
     child.on('close', (code) => {
@@ -505,7 +518,7 @@ async function resolveTool(cmd) {
     })
     child.on('error', () => resolve(''))
   })
-  if (whichPath && await commandAvailable(whichPath)) return whichPath
+  if (pathFromShell && await commandAvailable(pathFromShell)) return pathFromShell
 
   for (const candidate of TOOL_PATHS[cmd] || []) {
     if (fs.existsSync(candidate) && await commandAvailable(candidate)) return candidate
