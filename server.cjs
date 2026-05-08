@@ -1234,7 +1234,7 @@ app.use('/thumbnails', express.static(THUMBNAILS_DIR))
 app.use(express.static(path.join(__dirname, 'dist')))
 
 // SPA fallback — must be after all API routes
-app.get('*', (_req, res) => {
+app.use((_req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'))
 })
 
