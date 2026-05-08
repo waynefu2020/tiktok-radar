@@ -1089,7 +1089,7 @@ app.get('/api/weekly-report', (req, res) => {
   const now = new Date()
   const dayOfWeek = now.getDay()
   // 上周五到本周四
-  const daysToThursday = (dayOfWeek + 2) % 7
+  const daysToThursday = (dayOfWeek + 3) % 7
   const lastThursday = new Date(now)
   lastThursday.setDate(now.getDate() - daysToThursday)
   lastThursday.setHours(23, 59, 59, 999)
@@ -1098,8 +1098,8 @@ app.get('/api/weekly-report', (req, res) => {
   lastFriday.setDate(lastThursday.getDate() - 6)
   lastFriday.setHours(0, 0, 0, 0)
 
-  const weekStart = lastFriday.toISOString()
-  const weekEnd = lastThursday.toISOString()
+  const weekStart = lastFriday.toISOString().split('T')[0]
+  const weekEnd = lastThursday.toISOString().split('T')[0]
 
   const videos = getWeeklyViralReport(weekStart, weekEnd)
   const byApp = {}

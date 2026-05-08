@@ -343,7 +343,7 @@ function getViralVideos(since) {
 function getWeeklyViralReport(weekStart, weekEnd) {
   const rows = db.prepare(`
     SELECT payload, app, likes, published_at FROM videos
-    WHERE is_viral = 1 AND notified_at >= ? AND notified_at <= ?
+    WHERE is_viral = 1 AND published_at >= ? AND published_at <= ?
     ORDER BY likes DESC
   `).all(weekStart, weekEnd)
   return rows.map(row => ({
