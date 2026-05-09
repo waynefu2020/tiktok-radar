@@ -471,6 +471,11 @@ fs.mkdirSync(TEMP_DIR, { recursive: true })
 const THUMBNAILS_DIR = path.join(__dirname, 'public', 'thumbnails')
 fs.mkdirSync(THUMBNAILS_DIR, { recursive: true })
 
+const AVATARS_DIR = process.env.DB_PATH
+  ? path.join(path.dirname(process.env.DB_PATH), 'avatars')
+  : path.join(__dirname, 'data', 'avatars')
+fs.mkdirSync(AVATARS_DIR, { recursive: true })
+
 function runCommand(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
