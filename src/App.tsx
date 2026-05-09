@@ -9,6 +9,7 @@ import CreatorDatabase from './pages/CreatorDatabase'
 import AppManager from './pages/AppManager'
 import WeeklyReport from './pages/WeeklyReport'
 import IdeaShellPage from './pages/IdeaShellPage'
+import Docs from './pages/Docs'
 import Placeholder from './pages/Placeholder'
 
 export default function App() {
@@ -27,7 +28,7 @@ export default function App() {
             <Route path="/apps" element={<AppManager />} />
             <Route path="/weekly" element={<WeeklyReport />} />
             <Route path="/idea-shell" element={<IdeaShellPage />} />
-            <Route path="/docs" element={<Placeholder title="使用文档" subtitle="快速上手指南" />} />
+            <Route path="/docs" element={<Docs />} />
             <Route path="/settings" element={<Placeholder title="设置" subtitle="账号与偏好设置" />} />
           </Routes>
         </main>
