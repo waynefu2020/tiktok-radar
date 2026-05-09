@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { Radar, LayoutDashboard, TrendingUp, FileText, Download, Users, BookOpen, Settings, Box, BarChart3, Shell } from 'lucide-react'
+import { Radar, LayoutDashboard, TrendingUp, Users, BookOpen, Settings, Box, BarChart3, Shell, Sun, Moon, LogOut, Shield } from 'lucide-react'
+import { useTheme } from './ThemeProvider'
+import { useAuth } from './AuthProvider'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'UGC 视频中心' },
   { to: '/trends', icon: TrendingUp, label: '趋势分析' },
-  { to: '/scripts', icon: FileText, label: '脚本拆解' },
-  { to: '/downloads', icon: Download, label: '素材下载' },
   { to: '/creators', icon: Users, label: '达人库' },
   { to: '/apps', icon: Box, label: '竞品管理' },
   { to: '/weekly', icon: BarChart3, label: '爆款周报' },
@@ -18,19 +18,26 @@ const bottomItems = [
 ]
 
 export default function Sidebar() {
+  const { theme, toggleTheme } = useTheme()
+  const { user, logout, isAdmin } = useAuth()
+
+  const displayName = user?.displayName || user?.username || '用户'
+  const roleLabel = user?.role === 'admin' ? '管理员' : '成员'
+  const initial = displayName.slice(0, 1).toUpperCase()
+
   return (
     <aside
-      className="fixed left-0 top-0 h-full z-40 flex flex-col border-r border-[#2E3045]"
-      style={{ background: 'rgba(20, 22, 31, 0.98)', width: 240 }}
+      className="fixed left-0 top-0 h-full z-40 flex flex-col border-r"
+      style={{ background: 'var(--sidebar)', borderColor: 'var(--sidebar-border)', width: 240 }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-[60px] border-b border-[#2E3045]/50 shrink-0">
+      <div className="flex items-center gap-3 px-4 h-[60px] border-b shrink-0" style={{ borderColor: 'var(--sidebar-border)' }}>
         <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center shrink-0">
           <Radar size={16} className="text-white" />
         </div>
         <div>
-          <div className="text-sm font-bold text-white leading-tight">竞品雷达</div>
-          <div className="text-[10px] text-[#8A8FA8] leading-tight">ideaShell TikTok</div>
+          <div className="text-sm font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>竞品雷达</div>
+          <div className="text-[10px] leading-tight" style={{ color: 'var(--text-muted)' }}>ideaShell TikTok</div>
         </div>
       </div>
 
@@ -47,10 +54,29 @@ export default function Sidebar() {
             <span className="truncate">{label}</span>
           </NavLink>
         ))}
+
+        {isAdmin && (
+          <NavLink
+            to="/users"
+            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+          >
+            <Shield size={18} className="shrink-0" />
+            <span className="truncate">用户管理</span>
+          </NavLink>
+        )}
       </nav>
 
       {/* Bottom */}
-      <div className="px-3 pb-4 border-t border-[#2E3045]/50 pt-3 space-y-0.5">
+      <div className="px-3 pb-4 border-t pt-3 space-y-0.5" style={{ borderColor: 'var(--sidebar-border)' }}>
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className="nav-item w-full"
+        >
+          {theme === 'dark' ? <Sun size={18} className="shrink-0" /> : <Moon size={18} className="shrink-0" />}
+          <span className="truncate">{theme === 'dark' ? '切换浅色' : '切换深色'}</span>
+        </button>
+
         {bottomItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
@@ -62,15 +88,26 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
-        {/* User avatar */}
+        {/* User info */}
         <div className="flex items-center gap-2 px-4 py-2.5 mt-2">
-          <div className="w-7 h-7 rounded-full gradient-bg flex items-center justify-center text-white text-xs font-bold shrink-0">
-            大
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+            style={{ background: 'var(--accent)' }}
+          >
+            {initial}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-[#C8CBE0] truncate">大威</div>
-            <div className="text-[10px] text-[#8A8FA8] truncate">ideaShell 运营</div>
+            <div className="text-xs font-medium truncate" style={{ color: 'var(--text-secondary)' }}>{displayName}</div>
+            <div className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{roleLabel}</div>
           </div>
+          <button
+            onClick={logout}
+            title="退出登录"
+            className="w-6 h-6 rounded flex items-center justify-center transition-colors shrink-0"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <LogOut size={13} />
+          </button>
         </div>
       </div>
     </aside>

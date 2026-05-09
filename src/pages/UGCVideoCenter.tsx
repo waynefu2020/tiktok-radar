@@ -3,6 +3,7 @@ import { Heart, MessageCircle, Bookmark, Share2, ExternalLink, FileText, Chevron
 import TopBar from '../components/TopBar'
 import StatCard, { fmt } from '../components/StatCard'
 import AppBadge from '../components/AppBadge'
+import { useAuth } from '../components/AuthProvider'
 
 import { AppId, AppConfig, ScriptBreakdown, Video } from '../types'
 import { Video as VideoIcon, Users, Flame, Heart as HeartIcon } from 'lucide-react'
@@ -15,6 +16,8 @@ const TIME_FILTERS = [
   { label: '最近90天', days: 90 },
   { label: '全部', days: 9999 },
 ]
+
+const PAGE_SIZE_OPTIONS = [20, 50, 100]
 
 type SyncStatus = 'idle' | 'syncing' | 'done' | 'error'
 
@@ -49,31 +52,31 @@ function BreakdownView({ breakdown, source, inferredFrom }: { breakdown: ScriptB
         </div>
       )}
       <div className="grid grid-cols-2 gap-3 text-xs">
-        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-          <div className="text-[#8A8FA8] mb-1">开场钩子</div>
-          <div className="text-[#C8CBE0] leading-relaxed">{breakdown.hook}</div>
+        <div className="rounded-lg bg-panel border border-border p-3">
+          <div className="text-text-muted mb-1">开场钩子</div>
+          <div className="text-text-secondary leading-relaxed">{breakdown.hook}</div>
         </div>
-        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-          <div className="text-[#8A8FA8] mb-1">痛点</div>
-          <div className="text-[#C8CBE0] leading-relaxed">{breakdown.painPoint}</div>
+        <div className="rounded-lg bg-panel border border-border p-3">
+          <div className="text-text-muted mb-1">痛点</div>
+          <div className="text-text-secondary leading-relaxed">{breakdown.painPoint}</div>
         </div>
-        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-          <div className="text-[#8A8FA8] mb-1">产品植入</div>
-          <div className="text-[#C8CBE0] leading-relaxed">{breakdown.productPlacement}</div>
+        <div className="rounded-lg bg-panel border border-border p-3">
+          <div className="text-text-muted mb-1">产品植入</div>
+          <div className="text-text-secondary leading-relaxed">{breakdown.productPlacement}</div>
         </div>
-        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-          <div className="text-[#8A8FA8] mb-1">CTA</div>
-          <div className="text-[#C8CBE0] leading-relaxed">{breakdown.cta}</div>
+        <div className="rounded-lg bg-panel border border-border p-3">
+          <div className="text-text-muted mb-1">CTA</div>
+          <div className="text-text-secondary leading-relaxed">{breakdown.cta}</div>
         </div>
-        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3 col-span-2">
-          <div className="text-[#8A8FA8] mb-2">内容结构</div>
-          <ol className="space-y-1 text-[#C8CBE0] list-decimal list-inside">
+        <div className="rounded-lg bg-panel border border-border p-3 col-span-2">
+          <div className="text-text-muted mb-2">内容结构</div>
+          <ol className="space-y-1 text-text-secondary list-decimal list-inside">
             {breakdown.structure.map((item, idx) => <li key={idx}>{item}</li>)}
           </ol>
         </div>
-        <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3 col-span-2">
-          <div className="text-[#8A8FA8] mb-2">可复用拍摄建议</div>
-          <ul className="space-y-1 text-[#C8CBE0] list-disc list-inside">
+        <div className="rounded-lg bg-panel border border-border p-3 col-span-2">
+          <div className="text-text-muted mb-2">可复用拍摄建议</div>
+          <ul className="space-y-1 text-text-secondary list-disc list-inside">
             {breakdown.reusableIdeas.map((item, idx) => <li key={idx}>{item}</li>)}
           </ul>
         </div>
@@ -82,7 +85,7 @@ function BreakdownView({ breakdown, source, inferredFrom }: { breakdown: ScriptB
   )
 }
 
-function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[] }) {
+function VideoRow({ video, appConfigs, isAdmin }: { video: Video; appConfigs: AppConfig[]; isAdmin: boolean }) {
   const [expanded, setExpanded] = useState(false)
   const [scriptVideo, setScriptVideo] = useState(video)
   const [loadingScript, setLoadingScript] = useState(false)
@@ -93,7 +96,13 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
   const handleToggleScript = async () => {
     const nextExpanded = !expanded
     setExpanded(nextExpanded)
-    if (!nextExpanded || scriptVideo.transcriptStatus === 'ready' || (scriptVideo.transcriptStatus === 'no_transcript' && scriptVideo.breakdown) || loadingScript) return
+    if (
+      !nextExpanded ||
+      scriptVideo.transcriptStatus === 'ready' ||
+      (scriptVideo.transcriptStatus === 'no_transcript' && scriptVideo.breakdown) ||
+      loadingScript ||
+      !isAdmin
+    ) return
 
     setLoadingScript(true)
     setScriptError('')
@@ -112,7 +121,7 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
       <tr className="table-row group">
         <td className="px-4 py-3 w-[42%]">
           <div className="flex items-start gap-3">
-            <div className="w-16 h-9 rounded overflow-hidden shrink-0 bg-[rgb(28,30,42)]">
+            <div className="w-16 h-9 rounded overflow-hidden shrink-0 bg-panel">
               <img
                 src={thumbnailSrc}
                 alt=""
@@ -127,7 +136,7 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
                 target="_blank"
                 rel="noreferrer"
                 title="打开 TikTok 原视频"
-                className="block text-sm text-white leading-snug line-clamp-2 mb-1.5 hover:text-[#22D3EE] transition-colors"
+                className="block text-sm text-text-primary leading-snug line-clamp-2 mb-1.5 hover:text-[#22D3EE] transition-colors"
               >
                 {video.title}
               </a>
@@ -145,30 +154,30 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
             <img
               src={avatarSrc}
               alt=""
-              className="w-6 h-6 rounded-full shrink-0 bg-[rgb(28,30,42)]"
+              className="w-6 h-6 rounded-full shrink-0 bg-panel"
               onError={e => { (e.target as HTMLImageElement).src = creatorAvatarFallback(video.creator.username) }}
             />
-            <span className="text-xs text-[#C8CBE0] truncate">@{video.creator.username}</span>
+            <span className="text-xs text-text-secondary truncate">@{video.creator.username}</span>
           </div>
         </td>
-        <td className="px-3 py-3 w-[8%] text-xs text-[#8A8FA8]">{video.publishedAt}</td>
+        <td className="px-3 py-3 w-[8%] text-xs text-text-muted">{video.publishedAt}</td>
         <td className="px-3 py-3 w-[7%]">
-          <div className="flex items-center gap-1 text-xs text-[#C8CBE0]">
+          <div className="flex items-center gap-1 text-xs text-text-secondary">
             <Heart size={11} className="text-rose-400" />{fmt(video.likes)}
           </div>
         </td>
         <td className="px-3 py-3 w-[7%]">
-          <div className="flex items-center gap-1 text-xs text-[#C8CBE0]">
+          <div className="flex items-center gap-1 text-xs text-text-secondary">
             <MessageCircle size={11} className="text-blue-400" />{fmt(video.comments)}
           </div>
         </td>
         <td className="px-3 py-3 w-[7%]">
-          <div className="flex items-center gap-1 text-xs text-[#C8CBE0]">
+          <div className="flex items-center gap-1 text-xs text-text-secondary">
             <Bookmark size={11} className="text-amber-400" />{fmt(video.saves)}
           </div>
         </td>
         <td className="px-3 py-3 w-[7%]">
-          <div className="flex items-center gap-1 text-xs text-[#C8CBE0]">
+          <div className="flex items-center gap-1 text-xs text-text-secondary">
             <Share2 size={11} className="text-emerald-400" />{fmt(video.shares)}
           </div>
         </td>
@@ -177,14 +186,14 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
             <button
               onClick={handleToggleScript}
               title="查看脚本"
-              className="w-7 h-7 rounded-md flex items-center justify-center bg-[rgb(28,30,42)] border border-[#2E3045] text-[#8A8FA8] hover:text-[#6366F1] hover:border-[#6366F1]/40 transition-colors"
+              className="w-7 h-7 rounded-md flex items-center justify-center bg-panel border border-border text-text-muted hover:text-[#6366F1] hover:border-[#6366F1]/40 transition-colors"
             >
               {expanded ? <ChevronUp size={13} /> : <FileText size={13} />}
             </button>
             <a
               href={video.tiktokUrl} target="_blank" rel="noreferrer"
               title="TikTok 原视频"
-              className="w-7 h-7 rounded-md flex items-center justify-center bg-[rgb(28,30,42)] border border-[#2E3045] text-[#8A8FA8] hover:text-[#22D3EE] hover:border-[#22D3EE]/40 transition-colors"
+              className="w-7 h-7 rounded-md flex items-center justify-center bg-panel border border-border text-text-muted hover:text-[#22D3EE] hover:border-[#22D3EE]/40 transition-colors"
             >
               <ExternalLink size={13} />
             </a>
@@ -194,7 +203,7 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
       {expanded && (
         <tr>
           <td colSpan={9} className="p-0">
-            <div className="px-6 py-4 bg-[rgb(14,16,22)] border-t border-[#2E3045]/40">
+            <div className="px-6 py-4 bg-bg border-t border-border/40">
               {loadingScript ? (
                 <div className="flex items-center gap-2 text-sm text-[#818CF8]">
                   <Loader2 size={14} className="animate-spin" />
@@ -202,14 +211,16 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
                 </div>
               ) : scriptError ? (
                 <div className="text-sm text-red-400">{scriptError}</div>
+              ) : !isAdmin && !scriptVideo.transcriptText && !scriptVideo.breakdown ? (
+                <div className="text-sm text-text-muted">这条视频还没有脚本分析结果。仅管理员可触发分析。</div>
               ) : !scriptVideo.breakdown && scriptVideo.transcriptStatus === 'no_transcript' ? (
-                <div className="text-sm text-[#8A8FA8]">未获取到这条视频的真实字幕/转写，暂不生成 AI 拆解。</div>
+                <div className="text-sm text-text-muted">未获取到这条视频的真实字幕/转写，暂不生成 AI 拆解。</div>
               ) : (
                 <div className="space-y-4">
                   {scriptVideo.transcriptText && (
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <div className="text-xs text-[#8A8FA8] font-medium">脚本原文 / 真实字幕</div>
+                        <div className="text-xs text-text-muted font-medium">脚本原文 / 真实字幕</div>
                         <button
                           onClick={() => navigator.clipboard.writeText(scriptVideo.transcriptText || '')}
                           className="flex items-center gap-1.5 text-xs text-[#6366F1] hover:text-[#818CF8] transition-colors"
@@ -217,14 +228,14 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
                           <Copy size={11} /> 复制原文
                         </button>
                       </div>
-                      <pre className="text-xs text-[#C8CBE0] whitespace-pre-wrap leading-relaxed font-sans bg-[rgb(18,20,28)] border border-[#2E3045] rounded-lg p-3 max-h-52 overflow-auto">
+                      <pre className="text-xs text-text-secondary whitespace-pre-wrap leading-relaxed font-sans bg-panel border border-border rounded-lg p-3 max-h-52 overflow-auto">
                         {scriptVideo.transcriptText}
                       </pre>
                     </div>
                   )}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <div className="text-xs text-[#8A8FA8] font-medium">AI 拆解</div>
+                      <div className="text-xs text-text-muted font-medium">AI 拆解</div>
                       {scriptVideo.analysisSource === 'asr' && (
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">AI 转写</span>
                       )}
@@ -239,7 +250,7 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
                         inferredFrom={scriptVideo.inferredFrom}
                       />
                     ) : (
-                      <div className="text-sm text-[#8A8FA8]">暂无 AI 拆解</div>
+                      <div className="text-sm text-text-muted">暂无 AI 拆解</div>
                     )}
                   </div>
                 </div>
@@ -253,9 +264,12 @@ function VideoRow({ video, appConfigs }: { video: Video; appConfigs: AppConfig[]
 }
 
 export default function UGCVideoCenter() {
+  const { isAdmin } = useAuth()
   const [appFilter, setAppFilter] = useState<AppId | 'all'>('all')
   const [timeFilter, setTimeFilter] = useState(9999)
   const [search, setSearch] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [appConfigs, setAppConfigs] = useState<AppConfig[]>([])
 
   // 真实数据状态
@@ -264,6 +278,7 @@ export default function UGCVideoCenter() {
   const [syncMessage, setSyncMessage] = useState('')
   const [syncingApp, setSyncingApp] = useState<AppId | 'all' | null>(null)
   const [serverOnline, setServerOnline] = useState<boolean | null>(null)
+  const [keyConfigured, setKeyConfigured] = useState<boolean | null>(null)
   const [asrAvailable, setAsrAvailable] = useState<boolean | null>(null)
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
 
@@ -291,6 +306,21 @@ export default function UGCVideoCenter() {
     }))
   }, [displayVideos, appFilter, timeFilter, search])
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const pageStart = filtered.length === 0 ? 0 : (currentPage - 1) * pageSize
+  const pageEnd = Math.min(pageStart + pageSize, filtered.length)
+  const paginatedVideos = filtered.slice(pageStart, pageEnd)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [appFilter, timeFilter, search, pageSize])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
   // 同步所有竞品
   const handleSyncAll = useCallback(async () => {
     setSyncStatus('syncing')
@@ -315,34 +345,33 @@ export default function UGCVideoCenter() {
     }
   }, [])
 
-  // 检查后端是否在线；在线时进入页面默认同步真实数据。
+  // 首次进入仅加载已有缓存；不再自动触发远端同步。
   useEffect(() => {
     getHealth().then(health => {
-      const ok = health.ok && health.keyConfigured
-      setServerOnline(ok)
+      setServerOnline(health.ok)
+      setKeyConfigured(health.keyConfigured)
       setAsrAvailable(health.asrAvailable ?? null)
-      if (ok) {
+      if (health.ok) {
         getStoredVideos()
           .then(cache => {
             if (cache.videos.length > 0) {
               setRealVideos(cache.videos)
               setLastSyncTime(new Date(cache.syncedAt).toLocaleTimeString('zh-CN'))
-            } else {
-              handleSyncAll()
             }
           })
-          .catch(() => handleSyncAll())
-      } else {
-        setSyncStatus('error')
-        setSyncMessage('API 服务离线或未配置 Key，无法获取真实数据')
+          .catch(err => {
+            setSyncStatus('error')
+            setSyncMessage(err.message || '读取本地缓存失败')
+          })
       }
     }).catch(() => {
       setServerOnline(false)
+      setKeyConfigured(false)
       setAsrAvailable(false)
       setSyncStatus('error')
-      setSyncMessage('API 服务离线或未配置 Key，无法获取真实数据')
+      setSyncMessage('API 服务离线，无法读取缓存数据')
     })
-  }, [handleSyncAll])
+  }, [])
 
   // 同步单个 App
   const handleSyncApp = useCallback(async (appId: AppId) => {
@@ -368,9 +397,10 @@ export default function UGCVideoCenter() {
     } finally {
       setSyncingApp(null)
     }
-  }, [realVideos.length])
+  }, [appConfigs])
 
   const isSyncing = syncStatus === 'syncing'
+  const canSync = isAdmin && serverOnline === true && keyConfigured === true
   const realCount = realVideos.length
 
   const totalLikes = filtered.reduce((s, v) => s + v.likes, 0)
@@ -393,11 +423,11 @@ export default function UGCVideoCenter() {
       <div className="mt-5 mb-4 flex items-center gap-3 flex-wrap">
         {/* Server status */}
         <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border ${
-          serverOnline === null ? 'border-[#2E3045] text-[#8A8FA8]' :
+          serverOnline === null ? 'border-border text-text-muted' :
           serverOnline ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' :
           'border-red-500/30 bg-red-500/10 text-red-400'
         }`}>
-          <div className={`w-1.5 h-1.5 rounded-full ${serverOnline === null ? 'bg-[#8A8FA8]' : serverOnline ? 'bg-emerald-400' : 'bg-red-400'}`} />
+          <div className={`w-1.5 h-1.5 rounded-full ${serverOnline === null ? 'bg-text-muted' : serverOnline ? 'bg-emerald-400' : 'bg-red-400'}`} />
           {serverOnline === null ? '检测中…' : serverOnline ? 'API 服务在线' : 'API 服务离线'}
         </div>
         {serverOnline && asrAvailable === false && (
@@ -406,34 +436,47 @@ export default function UGCVideoCenter() {
             未检测到视频转写工具，将优先使用字幕，失败后只做推测拆解
           </div>
         )}
+        {serverOnline && keyConfigured === false && (
+          <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300">
+            <AlertCircle size={12} />
+            未配置 TikHub API Key，当前只支持查看已有缓存数据
+          </div>
+        )}
 
-        {/* Sync all */}
-        <button
-          onClick={handleSyncAll}
-          disabled={isSyncing || serverOnline === false}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {isSyncing && syncingApp === 'all' ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          同步所有竞品
-        </button>
+        {isAdmin ? (
+          <>
+            <button
+              onClick={handleSyncAll}
+              disabled={isSyncing || !canSync}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {isSyncing && syncingApp === 'all' ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              同步所有竞品
+            </button>
 
-        {/* Sync per app */}
-        {appConfigs.map(app => (
-          <button
-            key={app.id}
-            onClick={() => handleSyncApp(app.id)}
-            disabled={isSyncing || serverOnline === false}
-            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            style={{
-              borderColor: app.borderColor,
-              color: app.color,
-              backgroundColor: app.bgColor,
-            }}
-          >
-            {isSyncing && syncingApp === app.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-            {app.name}
-          </button>
-        ))}
+            {appConfigs.map(app => (
+              <button
+                key={app.id}
+                onClick={() => handleSyncApp(app.id)}
+                disabled={isSyncing || !canSync}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                style={{
+                  borderColor: app.borderColor,
+                  color: app.color,
+                  backgroundColor: app.bgColor,
+                }}
+              >
+                {isSyncing && syncingApp === app.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                {app.name}
+              </button>
+            ))}
+          </>
+        ) : (
+          <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border text-text-muted">
+            <Database size={12} />
+            普通成员仅查看已有缓存数据；同步和脚本分析由管理员执行
+          </div>
+        )}
 
         {/* Status message */}
         {syncStatus !== 'idle' && (
@@ -450,7 +493,7 @@ export default function UGCVideoCenter() {
 
         {/* Real data indicator */}
         {realCount > 0 && syncStatus === 'idle' && (
-          <div className="flex items-center gap-1.5 text-xs text-[#8A8FA8] ml-auto">
+          <div className="flex items-center gap-1.5 text-xs text-text-muted ml-auto">
             <Database size={11} />
             上次同步：{lastSyncTime} · {realCount} 条真实数据
           </div>
@@ -499,12 +542,12 @@ export default function UGCVideoCenter() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-[#2E3045] overflow-hidden bg-[rgb(12,14,20)]">
+      <div className="rounded-xl border border-border overflow-hidden bg-bg">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[#2E3045]">
+            <tr className="border-b border-border">
               {['视频内容', '来源 App', '达人', '时间', '点赞', '评论', '收藏', '分享', '操作'].map(h => (
-                <th key={h} className="px-3 py-3 text-left text-[11px] font-medium text-[#8A8FA8] first:px-4">{h}</th>
+                <th key={h} className="px-3 py-3 text-left text-[11px] font-medium text-text-muted first:px-4">{h}</th>
               ))}
             </tr>
           </thead>
@@ -512,21 +555,82 @@ export default function UGCVideoCenter() {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={9} className="text-center py-16 text-sm text-[#555873]">
-                  {syncStatus === 'syncing' ? '正在获取真实数据…' : '暂无真实数据，请检查 API 后重试同步'}
+                  {syncStatus === 'syncing'
+                    ? '正在获取真实数据…'
+                    : isAdmin
+                      ? '暂无真实数据，请手动同步竞品数据'
+                      : '暂无可查看数据，请等待管理员同步'}
                 </td>
               </tr>
             ) : (
-              filtered.map(v => <VideoRow key={v.id} video={v} appConfigs={appConfigs} />)
+              paginatedVideos.map(v => <VideoRow key={v.id} video={v} appConfigs={appConfigs} isAdmin={isAdmin} />)
             )}
           </tbody>
         </table>
       </div>
 
-      <div className="mt-3 text-xs text-[#555873] text-right">
-        共 {filtered.length} 条
-        {realCount > 0 && <span className="text-emerald-500/60"> · {realCount} 条来自 TikHub 真实数据</span>}
-        {realCount === 0 && syncStatus === 'syncing' && <span> · 正在从 TikHub 获取真实数据</span>}
-        {realCount === 0 && syncStatus === 'error' && <span> · 暂无真实数据</span>}
+      <div className="mt-4 flex items-center justify-between gap-4 flex-wrap">
+        <div className="text-xs text-[#555873]">
+          共 {filtered.length} 条
+          {filtered.length > 0 && <span> · 当前显示 {pageStart + 1}-{pageEnd} 条</span>}
+          {realCount > 0 && <span className="text-emerald-500/60"> · {realCount} 条来自 TikHub 真实数据</span>}
+          {realCount === 0 && syncStatus === 'syncing' && <span> · 正在从 TikHub 获取真实数据</span>}
+          {realCount === 0 && syncStatus === 'error' && <span> · 暂无真实数据</span>}
+        </div>
+
+        {filtered.length > 0 && (
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-xs text-text-muted">
+              <span>每页</span>
+              <select
+                value={pageSize}
+                onChange={e => setPageSize(Number(e.target.value))}
+                className="bg-panel border border-border rounded-lg px-2 py-1 text-xs text-text-secondary focus:outline-none cursor-pointer"
+              >
+                {PAGE_SIZE_OPTIONS.map(size => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+              <span>条</span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg text-xs border border-border text-text-muted hover:text-text-secondary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                上一页
+              </button>
+
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`min-w-8 px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${
+                    currentPage === page
+                      ? 'border-[#6366F1]/40 bg-[rgba(99,102,241,0.12)] text-[#818CF8]'
+                      : 'border-border text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg text-xs border border-border text-text-muted hover:text-text-secondary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                下一页
+              </button>
+            </div>
+
+            <div className="text-xs text-text-muted">
+              第 {currentPage} / {totalPages} 页
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

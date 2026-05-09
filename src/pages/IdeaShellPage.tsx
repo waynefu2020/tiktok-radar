@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Users, Plus, Trash2, RefreshCw, Loader2, AlertCircle,
   CheckCircle2, X, ExternalLink, Heart, MessageCircle, Share2, Video, Eye, Activity,
 } from 'lucide-react'
 import TopBar from '../components/TopBar'
+import { useAuth } from '../components/AuthProvider'
 import { fmt } from '../components/StatCard'
 import {
   getIdeaCreators,
@@ -70,12 +71,13 @@ function detectCreatorLanguage(videos: IdeaVideo[]) {
   return ranked[0].value > 0 ? ranked[0].label : '未知'
 }
 
-function CreatorRow({ creator, onRefresh, onDelete, refreshing, deleting }: {
+function CreatorRow({ creator, onRefresh, onDelete, refreshing, deleting, isAdmin }: {
   creator: IdeaCreatorRow
   onRefresh: (c: IdeaCreator) => void
   onDelete: (c: IdeaCreator) => void
   refreshing: string | null
   deleting: string | null
+  isAdmin: boolean
 }) {
   return (
     <tr className="table-row">
@@ -84,42 +86,46 @@ function CreatorRow({ creator, onRefresh, onDelete, refreshing, deleting }: {
           <img
             src={creator.avatarUrl || creatorAvatarFallback(creator.username)}
             alt=""
-            className="w-9 h-9 rounded-full shrink-0 bg-[rgb(28,30,42)]"
+            className="w-9 h-9 rounded-full shrink-0 bg-panel"
             onError={e => { (e.target as HTMLImageElement).src = creatorAvatarFallback(creator.username) }}
           />
           <div className="min-w-0">
-            <div className="text-sm text-white font-medium">{creator.displayName}</div>
-            <a href={`https://www.tiktok.com/@${creator.username}`} target="_blank" rel="noreferrer" className="text-xs text-[#8A8FA8] hover:text-[#22D3EE] transition-colors">
+            <div className="text-sm text-text-primary font-medium">{creator.displayName}</div>
+            <a href={`https://www.tiktok.com/@${creator.username}`} target="_blank" rel="noreferrer" className="text-xs text-text-muted hover:text-[#22D3EE] transition-colors">
               @{creator.username}
             </a>
           </div>
         </div>
       </td>
-      <td className="px-3 py-3 text-sm text-[#C8CBE0]">{creator.language}</td>
-      <td className="px-3 py-3 text-sm text-[#C8CBE0]">{fmt(creator.followers)}</td>
-      <td className="px-3 py-3 text-sm text-[#C8CBE0]">{fmt(creator.totalVideos)}</td>
-      <td className="px-3 py-3 text-sm text-[#C8CBE0]">{fmt(creator.totalViews)}</td>
-      <td className="px-3 py-3 text-sm text-[#C8CBE0]">{fmt(creator.totalEngagements)}</td>
-      <td className="px-3 py-3 text-sm text-[#C8CBE0]">{creator.engagementRate.toFixed(1)}%</td>
-      <td className="px-3 py-3 text-xs text-[#8A8FA8]">{new Date(creator.updatedAt).toLocaleDateString('zh-CN')}</td>
+      <td className="px-3 py-3 text-sm text-text-secondary">{creator.language}</td>
+      <td className="px-3 py-3 text-sm text-text-secondary">{fmt(creator.followers)}</td>
+      <td className="px-3 py-3 text-sm text-text-secondary">{fmt(creator.totalVideos)}</td>
+      <td className="px-3 py-3 text-sm text-text-secondary">{fmt(creator.totalViews)}</td>
+      <td className="px-3 py-3 text-sm text-text-secondary">{fmt(creator.totalEngagements)}</td>
+      <td className="px-3 py-3 text-sm text-text-secondary">{creator.engagementRate.toFixed(1)}%</td>
+      <td className="px-3 py-3 text-xs text-text-muted">{new Date(creator.updatedAt).toLocaleDateString('zh-CN')}</td>
       <td className="px-3 py-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onRefresh(creator)}
-            disabled={refreshing === creator.username}
-            title="刷新资料并抓取视频"
-            className="w-7 h-7 rounded-md flex items-center justify-center bg-[rgb(28,30,42)] border border-[#2E3045] text-[#8A8FA8] hover:text-[#6366F1] hover:border-[#6366F1]/40 disabled:opacity-50 transition-colors"
-          >
-            {refreshing === creator.username ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          </button>
-          <button
-            onClick={() => onDelete(creator)}
-            disabled={deleting === creator.username}
-            className="w-7 h-7 rounded-md flex items-center justify-center bg-[rgb(28,30,42)] border border-[#2E3045] text-[#8A8FA8] hover:text-red-400 hover:border-red-500/40 disabled:opacity-50 transition-colors"
-          >
-            {deleting === creator.username ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-          </button>
-        </div>
+        {isAdmin ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onRefresh(creator)}
+              disabled={refreshing === creator.username}
+              title="刷新资料并抓取视频"
+              className="w-7 h-7 rounded-md flex items-center justify-center bg-panel border border-border text-text-muted hover:text-[#6366F1] hover:border-[#6366F1]/40 disabled:opacity-50 transition-colors"
+            >
+              {refreshing === creator.username ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            </button>
+            <button
+              onClick={() => onDelete(creator)}
+              disabled={deleting === creator.username}
+              className="w-7 h-7 rounded-md flex items-center justify-center bg-panel border border-border text-text-muted hover:text-red-400 hover:border-red-500/40 disabled:opacity-50 transition-colors"
+            >
+              {deleting === creator.username ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+            </button>
+          </div>
+        ) : (
+          <span className="text-xs text-text-muted">只读</span>
+        )}
       </td>
     </tr>
   )
@@ -131,11 +137,11 @@ function VideoRow({ video }: { video: IdeaVideo }) {
     <tr className="table-row">
       <td className="px-4 py-3 w-[44%]">
         <div className="flex items-start gap-3">
-          <div className="w-16 h-9 rounded overflow-hidden shrink-0 bg-[rgb(28,30,42)]">
+          <div className="w-16 h-9 rounded overflow-hidden shrink-0 bg-panel">
             <img src={thumbnailSrc} alt="" className="w-full h-full object-cover" loading="lazy" onError={e => { (e.target as HTMLImageElement).src = videoThumbnailFallback(video.title) }} />
           </div>
           <div className="flex-1 min-w-0">
-            <a href={video.tiktokUrl} target="_blank" rel="noreferrer" className="block text-sm text-white leading-snug line-clamp-2 hover:text-[#22D3EE] transition-colors">
+            <a href={video.tiktokUrl} target="_blank" rel="noreferrer" className="block text-sm text-text-primary leading-snug line-clamp-2 hover:text-[#22D3EE] transition-colors">
               {video.title}
             </a>
           </div>
@@ -146,19 +152,19 @@ function VideoRow({ video }: { video: IdeaVideo }) {
           <img
             src={video.creator.avatarUrl || creatorAvatarFallback(video.creator.username)}
             alt=""
-            className="w-6 h-6 rounded-full shrink-0 bg-[rgb(28,30,42)]"
+            className="w-6 h-6 rounded-full shrink-0 bg-panel"
             onError={e => { (e.target as HTMLImageElement).src = creatorAvatarFallback(video.creator.username) }}
           />
-          <span className="text-xs text-[#C8CBE0] truncate">@{video.creator.username}</span>
+          <span className="text-xs text-text-secondary truncate">@{video.creator.username}</span>
         </div>
       </td>
-      <td className="px-3 py-3 w-[10%] text-xs text-[#8A8FA8]">{video.publishedAt}</td>
-      <td className="px-3 py-3 w-[8%]"><div className="flex items-center gap-1 text-xs text-[#C8CBE0]"><Eye size={11} className="text-[#8A8FA8]" />{fmt(video.views || 0)}</div></td>
-      <td className="px-3 py-3 w-[8%]"><div className="flex items-center gap-1 text-xs text-[#C8CBE0]"><Heart size={11} className="text-rose-400" />{fmt(video.likes)}</div></td>
-      <td className="px-3 py-3 w-[8%]"><div className="flex items-center gap-1 text-xs text-[#C8CBE0]"><MessageCircle size={11} className="text-blue-400" />{fmt(video.comments)}</div></td>
-      <td className="px-3 py-3 w-[8%]"><div className="flex items-center gap-1 text-xs text-[#C8CBE0]"><Share2 size={11} className="text-emerald-400" />{fmt(video.shares)}</div></td>
+      <td className="px-3 py-3 w-[10%] text-xs text-text-muted">{video.publishedAt}</td>
+      <td className="px-3 py-3 w-[8%]"><div className="flex items-center gap-1 text-xs text-text-secondary"><Eye size={11} className="text-text-muted" />{fmt(video.views || 0)}</div></td>
+      <td className="px-3 py-3 w-[8%]"><div className="flex items-center gap-1 text-xs text-text-secondary"><Heart size={11} className="text-rose-400" />{fmt(video.likes)}</div></td>
+      <td className="px-3 py-3 w-[8%]"><div className="flex items-center gap-1 text-xs text-text-secondary"><MessageCircle size={11} className="text-blue-400" />{fmt(video.comments)}</div></td>
+      <td className="px-3 py-3 w-[8%]"><div className="flex items-center gap-1 text-xs text-text-secondary"><Share2 size={11} className="text-emerald-400" />{fmt(video.shares)}</div></td>
       <td className="px-3 py-3 w-[4%]">
-        <a href={video.tiktokUrl} target="_blank" rel="noreferrer" className="text-[#8A8FA8] hover:text-[#22D3EE] transition-colors">
+        <a href={video.tiktokUrl} target="_blank" rel="noreferrer" className="text-text-muted hover:text-[#22D3EE] transition-colors">
           <ExternalLink size={13} />
         </a>
       </td>
@@ -172,6 +178,7 @@ function fetchResultText(result: IdeaFetchResult) {
 }
 
 export default function IdeaShellPage() {
+  const { isAdmin } = useAuth()
   const [tab, setTab] = useState<Tab>('creators')
   const [creators, setCreators] = useState<IdeaCreator[]>([])
   const [videos, setVideos] = useState<IdeaVideo[]>([])
@@ -186,7 +193,6 @@ export default function IdeaShellPage() {
   const [statusMessage, setStatusMessage] = useState('')
   const [fetchError, setFetchError] = useState('')
   const [addError, setAddError] = useState('')
-  const attemptedBackfill = useRef(false)
 
   const loadCreators = useCallback(async () => {
     setLoadingCreators(true)
@@ -216,22 +222,7 @@ export default function IdeaShellPage() {
   }, [loadCreators, loadVideos])
 
   useEffect(() => {
-    reloadAll().then(({ creatorRows, videoRows }) => {
-      if (creatorRows.length > 0 && videoRows.length === 0 && !attemptedBackfill.current) {
-        attemptedBackfill.current = true
-        setBackfilling(true)
-        setFetchError('')
-        backfillIdeaVideos()
-          .then(async result => {
-            setStatusMessage(`已自动补抓：${fetchResultText(result)}`)
-            await loadVideos()
-          })
-          .catch(err => {
-            setFetchError(err.message || '自动补抓失败')
-          })
-          .finally(() => setBackfilling(false))
-      }
-    }).catch(err => {
+    reloadAll().catch(err => {
       setFetchError(err.message || '加载失败')
     })
   }, [reloadAll, loadVideos])
@@ -302,6 +293,21 @@ export default function IdeaShellPage() {
     }
   }
 
+  const handleBackfill = async () => {
+    setBackfilling(true)
+    setFetchError('')
+    try {
+      const result = await backfillIdeaVideos()
+      setStatusMessage(`已补抓已有博主视频：${fetchResultText(result)}`)
+      await loadVideos()
+      setTab('videos')
+    } catch (err: any) {
+      setFetchError(err.message || '补抓失败')
+    } finally {
+      setBackfilling(false)
+    }
+  }
+
   const hasCreators = creators.length > 0
   const subtitle = useMemo(() => `${creators.length} 位合作博主 · ${videos.length} 条已抓取视频`, [creators.length, videos.length])
   const headlineStats = useMemo(() => {
@@ -350,31 +356,31 @@ export default function IdeaShellPage() {
 
       {/* 核心指标卡片 */}
       <div className="mt-4 grid grid-cols-3 gap-3">
-        <div className="rounded-xl bg-[rgb(18,20,28)] border border-[#2E3045] px-4 py-3 flex items-center gap-3">
+        <div className="rounded-xl bg-panel border border-border px-4 py-3 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
             <Eye size={15} className="text-sky-400" />
           </div>
           <div>
-            <div className="text-[11px] text-[#8A8FA8]">总播放量</div>
-            <div className="text-base font-semibold text-white leading-tight">{fmt(headlineStats.totalViews)}</div>
+            <div className="text-[11px] text-text-muted">总播放量</div>
+            <div className="text-base font-semibold text-text-primary leading-tight">{fmt(headlineStats.totalViews)}</div>
           </div>
         </div>
-        <div className="rounded-xl bg-[rgb(18,20,28)] border border-[#2E3045] px-4 py-3 flex items-center gap-3">
+        <div className="rounded-xl bg-panel border border-border px-4 py-3 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
             <Activity size={15} className="text-violet-400" />
           </div>
           <div>
-            <div className="text-[11px] text-[#8A8FA8]">总互动量</div>
-            <div className="text-base font-semibold text-white leading-tight">{fmt(headlineStats.totalEngagements)}</div>
+            <div className="text-[11px] text-text-muted">总互动量</div>
+            <div className="text-base font-semibold text-text-primary leading-tight">{fmt(headlineStats.totalEngagements)}</div>
           </div>
         </div>
-        <div className="rounded-xl bg-[rgb(18,20,28)] border border-[#2E3045] px-4 py-3 flex items-center gap-3">
+        <div className="rounded-xl bg-panel border border-border px-4 py-3 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0">
             <Heart size={15} className="text-rose-400" />
           </div>
           <div>
-            <div className="text-[11px] text-[#8A8FA8]">平均互动率</div>
-            <div className="text-base font-semibold text-white leading-tight">{headlineStats.averageEngagementRate.toFixed(1)}%</div>
+            <div className="text-[11px] text-text-muted">平均互动率</div>
+            <div className="text-base font-semibold text-text-primary leading-tight">{headlineStats.averageEngagementRate.toFixed(1)}%</div>
           </div>
         </div>
       </div>
@@ -393,10 +399,10 @@ export default function IdeaShellPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {backfilling && (
+          {(backfilling || fetchingAll) && (
             <div className="flex items-center gap-1.5 text-xs text-[#818CF8]">
               <Loader2 size={12} className="animate-spin" />
-              正在自动补抓…
+              {backfilling ? '正在补抓…' : '正在抓取…'}
             </div>
           )}
           {statusMessage && (
@@ -411,50 +417,70 @@ export default function IdeaShellPage() {
               {fetchError}
             </div>
           )}
-          <button
-            onClick={handleFetchAll}
-            disabled={fetchingAll || !hasCreators}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {fetchingAll ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            抓取全部博主视频
-          </button>
+          {isAdmin ? (
+            <>
+              <button
+                onClick={handleBackfill}
+                disabled={backfilling || fetchingAll || !hasCreators}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border text-text-muted hover:text-text-secondary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {backfilling ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                补抓已有博主视频
+              </button>
+              <button
+                onClick={handleFetchAll}
+                disabled={fetchingAll || backfilling || !hasCreators}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {fetchingAll ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                抓取全部博主视频
+              </button>
+            </>
+          ) : (
+            <div className="text-xs text-text-muted">普通成员仅查看已有博主和视频数据。</div>
+          )}
         </div>
       </div>
 
       {tab === 'creators' && (
         <div className="space-y-3">
           {/* 添加博主表单 */}
-          <div className="rounded-xl border border-[#2E3045] bg-[rgb(18,20,28)] px-4 py-3">
-            <form onSubmit={handleAdd} className="flex items-center gap-2">
-              <input
-                value={usernameInput}
-                onChange={e => setUsernameInput(e.target.value)}
-                placeholder="输入 TikTok 账号或主页链接"
-                className="flex-1 bg-[rgb(12,14,20)] border border-[#2E3045] rounded-lg px-3 py-2 text-sm text-[#C8CBE0] placeholder-[#555873] focus:outline-none focus:border-[#6366F1]/50"
-              />
-              <button
-                type="submit"
-                disabled={adding}
-                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.12)] text-[#C8CBE0] hover:bg-[rgba(99,102,241,0.2)] disabled:opacity-50 transition-colors whitespace-nowrap"
-              >
-                {adding ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                添加博主
-              </button>
-            </form>
-            {addError && (
-              <div className="flex items-center gap-2 text-xs text-red-400 mt-2">
-                <AlertCircle size={13} />{addError}
-              </div>
-            )}
-          </div>
+          {isAdmin ? (
+            <div className="rounded-xl border border-border bg-panel px-4 py-3">
+              <form onSubmit={handleAdd} className="flex items-center gap-2">
+                <input
+                  value={usernameInput}
+                  onChange={e => setUsernameInput(e.target.value)}
+                  placeholder="输入 TikTok 账号或主页链接"
+                  className="flex-1 bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text-secondary placeholder-text-muted/60 focus:outline-none focus:border-[#6366F1]/50"
+                />
+                <button
+                  type="submit"
+                  disabled={adding}
+                  className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.12)] text-text-secondary hover:bg-[rgba(99,102,241,0.2)] disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {adding ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                  添加博主
+                </button>
+              </form>
+              {addError && (
+                <div className="flex items-center gap-2 text-xs text-red-400 mt-2">
+                  <AlertCircle size={13} />{addError}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-panel px-4 py-3 text-sm text-text-muted">
+              普通成员可查看已有博主和视频，新增、刷新、删除和抓取仅管理员可操作。
+            </div>
+          )}
 
-          <div className="rounded-xl border border-[#2E3045] overflow-hidden bg-[rgb(12,14,20)]">
+          <div className="rounded-xl border border-border overflow-hidden bg-bg">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[#2E3045]">
+                <tr className="border-b border-border">
                   {['达人', '语言', '粉丝量', '视频数', '播放量', '互动量', '互动率', '更新时间', '操作'].map(h => (
-                    <th key={h} className="px-3 py-3 text-left text-[11px] font-medium text-[#8A8FA8] first:px-4">{h}</th>
+                    <th key={h} className="px-3 py-3 text-left text-[11px] font-medium text-text-muted first:px-4">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -473,6 +499,7 @@ export default function IdeaShellPage() {
                     onDelete={handleDelete}
                     refreshing={refreshing}
                     deleting={deleting}
+                    isAdmin={isAdmin}
                   />
                 ))}
               </tbody>
@@ -482,12 +509,12 @@ export default function IdeaShellPage() {
       )}
 
       {tab === 'videos' && (
-        <div className="rounded-xl border border-[#2E3045] overflow-hidden bg-[rgb(12,14,20)]">
+        <div className="rounded-xl border border-border overflow-hidden bg-bg">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[#2E3045]">
+              <tr className="border-b border-border">
                 {['视频内容', '达人', '发布时间', '播放', '点赞', '评论', '分享', ''].map(h => (
-                  <th key={h} className="px-3 py-3 text-left text-[11px] font-medium text-[#8A8FA8] first:px-4">{h}</th>
+                  <th key={h} className="px-3 py-3 text-left text-[11px] font-medium text-text-muted first:px-4">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -495,9 +522,11 @@ export default function IdeaShellPage() {
               {videos.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-16 text-sm text-[#555873]">
-                    {loadingVideos || backfilling
+                    {loadingVideos || backfilling || fetchingAll
                       ? '正在加载视频…'
-                      : '暂无视频，可先刷新博主或等待自动抓取完成'}
+                      : isAdmin
+                        ? '暂无视频，可手动补抓或抓取全部博主视频'
+                        : '暂无视频，请等待管理员抓取'}
                   </td>
                 </tr>
               ) : videos.map(v => <VideoRow key={v.id} video={v} />)}

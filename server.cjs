@@ -6,6 +6,8 @@ const fs = require('fs')
 const path = require('path')
 const { spawn } = require('child_process')
 const FormData = require('form-data')
+const bcrypt = require('bcryptjs')
+const jwt = require('jsonwebtoken')
 const {
   DB_PATH,
   deleteApp,
@@ -36,16 +38,32 @@ const {
   getIdeaVideos,
   upsertIdeaVideos,
   getIdeaVideoById,
+  // users
+  userExists,
+  getUserByUsername,
+  getUserById,
+  getAllUsers,
+  createUser,
+  deleteUser,
+  updateUserPassword,
+  updateUser,
 } = require('./db.cjs')
 
 const app = express()
+const HOST = process.env.HOST || '0.0.0.0'
 const PORT = process.env.PORT || 3001
 const TIKHUB_KEY = process.env.TIKHUB_API_KEY
 const TIKHUB_BASE = 'https://api.tikhub.io'
-const AI_BASE_URL = process.env.AI_BASE_URL || 'https://oneapi.rrdtech.cn/v1'
+const AI_BASE_URL = process.env.AI_BASE_URL || 'https://api.openai.com/v1'
 const AI_API_KEY = process.env.AI_API_KEY
 const AI_MODEL = process.env.AI_MODEL || 'gpt-5.4'
 const FALLBACK_IMAGE = ''
+const JWT_SECRET = String(process.env.JWT_SECRET || '').trim()
+const JWT_EXPIRES_IN = '30d'
+const BCRYPT_SALT_ROUNDS = 10
+const LOGIN_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
+const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5
+const LOGIN_RATE_LIMIT_BLOCK_MS = 15 * 60 * 1000
 const TOOL_PATHS = {
   'ffmpeg': [
     '/opt/homebrew/bin/ffmpeg',
@@ -64,8 +82,245 @@ const TOOL_PATHS = {
   ],
 }
 
+if (!JWT_SECRET) {
+  console.error('❌ Missing JWT_SECRET. Refusing to start without an explicit JWT secret.')
+  process.exit(1)
+}
+
+app.disable('x-powered-by')
+app.set('trust proxy', true)
 app.use(cors({ origin: process.env.ALLOWED_ORIGIN || '*' }))
 app.use(express.json())
+
+const loginAttempts = new Map()
+
+function getClientIp(req) {
+  return String(req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown')
+}
+
+function consumeLoginAttempt(ip) {
+  const now = Date.now()
+
+  for (const [key, record] of loginAttempts.entries()) {
+    if (record.blockedUntil <= now && record.windowStartedAt + LOGIN_RATE_LIMIT_WINDOW_MS <= now) {
+      loginAttempts.delete(key)
+    }
+  }
+
+  const record = loginAttempts.get(ip)
+  if (record?.blockedUntil > now) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((record.blockedUntil - now) / 1000)),
+    }
+  }
+
+  if (!record || record.windowStartedAt + LOGIN_RATE_LIMIT_WINDOW_MS <= now) {
+    loginAttempts.set(ip, {
+      count: 1,
+      windowStartedAt: now,
+      blockedUntil: 0,
+    })
+    return { allowed: true }
+  }
+
+  record.count += 1
+  if (record.count > LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
+    record.blockedUntil = now + LOGIN_RATE_LIMIT_BLOCK_MS
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil(LOGIN_RATE_LIMIT_BLOCK_MS / 1000)),
+    }
+  }
+
+  return { allowed: true }
+}
+
+function clearLoginAttempts(ip) {
+  loginAttempts.delete(ip)
+}
+
+// --- Auth Middleware ---
+
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+  if (!token) return res.status(401).json({ error: '未登录' })
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET)
+    req.user = decoded
+    next()
+  } catch {
+    return res.status(401).json({ error: '登录已过期' })
+  }
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: '仅管理员可操作' })
+  }
+  next()
+}
+
+// --- Auth Routes (no auth required) ---
+
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body
+  if (!username || !password) {
+    return res.status(400).json({ error: '请输入用户名和密码' })
+  }
+  const clientIp = getClientIp(req)
+  const rateLimit = consumeLoginAttempt(clientIp)
+  if (!rateLimit.allowed) {
+    return res
+      .status(429)
+      .set('Retry-After', String(rateLimit.retryAfterSeconds))
+      .json({ error: `登录失败次数过多，请 ${rateLimit.retryAfterSeconds} 秒后重试` })
+  }
+  const user = getUserByUsername(username)
+  if (!user) {
+    return res.status(401).json({ error: '用户名或密码错误' })
+  }
+  const valid = await bcrypt.compare(password, user.password_hash)
+  if (!valid) {
+    return res.status(401).json({ error: '用户名或密码错误' })
+  }
+  clearLoginAttempts(clientIp)
+  const token = jwt.sign(
+    { id: user.id, username: user.username, role: user.role },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  )
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      displayName: user.display_name,
+      createdAt: user.created_at,
+    },
+  })
+})
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  const user = getUserById(req.user.id)
+  if (!user) return res.status(401).json({ error: '用户不存在' })
+  res.json({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    displayName: user.display_name,
+    createdAt: user.created_at,
+  })
+})
+
+app.post('/api/auth/refresh', requireAuth, (req, res) => {
+  const token = jwt.sign(
+    { id: req.user.id, username: req.user.username, role: req.user.role },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  )
+  res.json({ token })
+})
+
+app.post('/api/auth/register', requireAuth, requireAdmin, async (req, res) => {
+  const { username, password, displayName, role = 'user' } = req.body
+  if (!username || !password) {
+    return res.status(400).json({ error: '用户名和密码必填' })
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: '密码至少6位' })
+  }
+  const existing = getUserByUsername(username)
+  if (existing) {
+    return res.status(409).json({ error: '用户名已存在' })
+  }
+  const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS)
+  const user = createUser({ username, passwordHash, role, displayName })
+  res.json({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    displayName: user.display_name,
+    createdAt: user.created_at,
+  })
+})
+
+app.get('/api/auth/users', requireAuth, requireAdmin, (_req, res) => {
+  const users = getAllUsers()
+  res.json(users.map(u => ({
+    id: u.id,
+    username: u.username,
+    role: u.role,
+    displayName: u.display_name,
+    createdAt: u.created_at,
+  })))
+})
+
+app.delete('/api/auth/users/:id', requireAuth, requireAdmin, (req, res) => {
+  const id = Number(req.params.id)
+  if (id === req.user.id) {
+    return res.status(400).json({ error: '不能删除自己' })
+  }
+  deleteUser(id)
+  res.json({ success: true })
+})
+
+app.put('/api/auth/users/:id', requireAuth, requireAdmin, (req, res) => {
+  const id = Number(req.params.id)
+  const { displayName, role } = req.body
+  const user = updateUser(id, {
+    displayName: displayName !== undefined ? String(displayName).trim() : undefined,
+    role: role === 'admin' || role === 'user' ? role : undefined,
+  })
+  if (!user) return res.status(404).json({ error: '用户不存在' })
+  res.json({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    displayName: user.display_name,
+    createdAt: user.created_at,
+  })
+})
+
+app.put('/api/auth/users/:id/password', requireAuth, async (req, res) => {
+  const id = Number(req.params.id)
+  const { currentPassword, newPassword } = req.body
+  if (req.user.role !== 'admin' && id !== req.user.id) {
+    return res.status(403).json({ error: '只能修改自己的密码' })
+  }
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ error: '新密码至少6位' })
+  }
+  const user = getUserById(id)
+  if (!user) return res.status(404).json({ error: '用户不存在' })
+  // 非管理员修改他人密码时，需要验证当前密码
+  if (req.user.role !== 'admin' || id === req.user.id) {
+    const valid = await bcrypt.compare(currentPassword, user.password_hash)
+    if (!valid) return res.status(401).json({ error: '当前密码错误' })
+  }
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS)
+  updateUserPassword(id, passwordHash)
+  res.json({ success: true })
+})
+
+// Health check (no auth required)
+app.get('/api/health', async (_req, res) => {
+  const [ytDlpPath, ffmpegPath] = await Promise.all([
+    resolveTool('yt-dlp'),
+    resolveTool('ffmpeg'),
+  ])
+  res.json({
+    ok: true,
+    keyConfigured: !!TIKHUB_KEY,
+    aiConfigured: !!AI_API_KEY,
+    asrAvailable: !!ytDlpPath && !!ffmpegPath,
+  })
+})
+
+// --- Protect all API routes below ---
+app.use('/api', requireAuth)
 
 const tikhub = axios.create({
   baseURL: TIKHUB_BASE,
@@ -579,6 +834,56 @@ async function downloadAvatar(username, avatarUrl) {
   }
 }
 
+function localAvatarCandidate(url) {
+  return typeof url === 'string' && url.startsWith('/avatars/')
+}
+
+async function localizeIdeaCreators(creators) {
+  const repaired = await Promise.all(
+    creators.map(async (creator) => {
+      if (!creator?.username || !creator.avatarUrl || localAvatarCandidate(creator.avatarUrl)) {
+        return creator
+      }
+
+      const localAvatarUrl = await downloadAvatar(creator.username, creator.avatarUrl)
+      if (!localAvatarCandidate(localAvatarUrl) || localAvatarUrl === creator.avatarUrl) {
+        return creator
+      }
+
+      return saveIdeaCreator({
+        ...creator,
+        avatarUrl: localAvatarUrl,
+      })
+    })
+  )
+
+  return repaired
+}
+
+function applyIdeaCreatorAvatars(videos, creators) {
+  const avatarByUsername = new Map(
+    creators
+      .filter(creator => creator?.username && creator.avatarUrl)
+      .map(creator => [String(creator.username).toLowerCase(), creator.avatarUrl])
+  )
+
+  return videos.map((video) => {
+    const username = String(video?.creator?.username || '').toLowerCase()
+    const avatarUrl = avatarByUsername.get(username)
+    if (!avatarUrl || !video?.creator) {
+      return video
+    }
+
+    return {
+      ...video,
+      creator: {
+        ...video.creator,
+        avatarUrl,
+      },
+    }
+  })
+}
+
 async function downloadVideoFromUrl(sourceUrl, targetPath) {
   const response = await axios.get(sourceUrl, {
     responseType: 'stream',
@@ -786,7 +1091,7 @@ async function generateInferredBreakdown(video) {
 }
 
 // 获取指定 TikTok 达人资料
-app.get('/api/creator/:username', async (req, res) => {
+app.get('/api/creator/:username', requireAdmin, async (req, res) => {
   const rawUsername = String(req.params.username || '').trim()
   const username = rawUsername
     .replace(/^@/, '')
@@ -835,7 +1140,7 @@ app.put('/api/video-scripts/:videoId', (req, res) => {
   res.json({ script: saved })
 })
 
-app.post('/api/videos/:videoId/analyze-script', async (req, res) => {
+app.post('/api/videos/:videoId/analyze-script', requireAdmin, async (req, res) => {
   const { videoId } = req.params
   const video = getVideoById(videoId)
   if (!video) return res.status(404).json({ error: 'Video not found' })
@@ -927,7 +1232,7 @@ app.get('/api/hidden-creators', (_req, res) => {
   res.json({ total: creators.length, creators })
 })
 
-app.post('/api/monitored-creators', async (req, res) => {
+app.post('/api/monitored-creators', requireAdmin, async (req, res) => {
   const rawUsername = String(req.body?.username || '').trim()
   const apps = Array.isArray(req.body?.apps) ? req.body.apps : []
   const username = rawUsername
@@ -955,12 +1260,12 @@ app.post('/api/monitored-creators', async (req, res) => {
   }
 })
 
-app.delete('/api/monitored-creators/:username', (req, res) => {
+app.delete('/api/monitored-creators/:username', requireAdmin, (req, res) => {
   deleteMonitoredCreator(req.params.username)
   res.json({ ok: true })
 })
 
-app.delete('/api/creators/:username', (req, res) => {
+app.delete('/api/creators/:username', requireAdmin, (req, res) => {
   const hidden = hideCreator(req.params.username)
   if (!hidden) return res.status(400).json({ error: 'Missing username' })
   res.json({ ok: true, hidden })
@@ -1039,7 +1344,7 @@ async function syncAppVideos(appId, count = 20) {
 }
 
 // 搜索某个竞品 App 的视频
-app.get('/api/sync/:appId', async (req, res) => {
+app.get('/api/sync/:appId', requireAdmin, async (req, res) => {
   const { appId } = req.params
   const count = parseInt(req.query.count) || 20
 
@@ -1051,7 +1356,7 @@ app.get('/api/sync/:appId', async (req, res) => {
 })
 
 // 批量同步所有竞品
-app.get('/api/sync', async (req, res) => {
+app.get('/api/sync', requireAdmin, async (req, res) => {
   const appIds = Object.keys(getAppKeywords())
   const results = {}
 
@@ -1081,7 +1386,7 @@ app.get('/api/apps', (_req, res) => {
   res.json({ apps: getApps() })
 })
 
-app.post('/api/apps', (req, res) => {
+app.post('/api/apps', requireAdmin, (req, res) => {
   const { id, name, color, bgColor, borderColor, keywords } = req.body
   if (!id || !name) return res.status(400).json({ error: 'Missing id or name' })
   const existing = getAppById(id)
@@ -1090,7 +1395,7 @@ app.post('/api/apps', (req, res) => {
   res.json({ app: saved })
 })
 
-app.put('/api/apps/:id', (req, res) => {
+app.put('/api/apps/:id', requireAdmin, (req, res) => {
   const { id } = req.params
   const existing = getAppById(id)
   if (!existing) return res.status(404).json({ error: 'App not found' })
@@ -1099,7 +1404,7 @@ app.put('/api/apps/:id', (req, res) => {
   res.json({ app: saved })
 })
 
-app.delete('/api/apps/:id', (req, res) => {
+app.delete('/api/apps/:id', requireAdmin, (req, res) => {
   deleteApp(req.params.id)
   res.json({ ok: true })
 })
@@ -1143,37 +1448,21 @@ app.get('/api/weekly-report', (req, res) => {
   })
 })
 
-// 健康检查
-app.get('/api/health', async (_req, res) => {
-  const [ytDlpPath, ffmpegPath] = await Promise.all([
-    resolveTool('yt-dlp'),
-    resolveTool('ffmpeg'),
-  ])
-  res.json({
-    ok: true,
-    keyConfigured: !!TIKHUB_KEY,
-    aiConfigured: !!AI_API_KEY,
-    asrAvailable: !!ytDlpPath && !!ffmpegPath,
-    tools: {
-      ytDlpAvailable: !!ytDlpPath,
-      ytDlpPath,
-      ffmpegAvailable: !!ffmpegPath,
-      ffmpegPath,
-    },
-    dbPath: DB_PATH,
-    apps: getApps().length,
-  })
-})
-
 // ========== ideaShell UGC 路由 ==========
 
 // 获取 ideaShell 博主列表
-app.get('/api/idea-creators', (_req, res) => {
-  res.json({ creators: getIdeaCreators() })
+app.get('/api/idea-creators', async (_req, res) => {
+  try {
+    const creators = await localizeIdeaCreators(getIdeaCreators())
+    res.json({ creators })
+  } catch (err) {
+    console.error('[IdeaShell] Load creators error:', err.message)
+    res.status(500).json({ error: err.message || 'Load creators failed' })
+  }
 })
 
 // 添加 ideaShell 博主
-app.post('/api/idea-creators', async (req, res) => {
+app.post('/api/idea-creators', requireAdmin, async (req, res) => {
   const rawUsername = String(req.body?.username || '').trim()
   const username = rawUsername
     .replace(/^@/, '')
@@ -1201,13 +1490,13 @@ app.post('/api/idea-creators', async (req, res) => {
 })
 
 // 删除 ideaShell 博主
-app.delete('/api/idea-creators/:username', (req, res) => {
+app.delete('/api/idea-creators/:username', requireAdmin, (req, res) => {
   deleteIdeaCreator(req.params.username)
   res.json({ ok: true })
 })
 
 // 刷新 ideaShell 博主资料
-app.post('/api/idea-creators/:username/refresh', async (req, res) => {
+app.post('/api/idea-creators/:username/refresh', requireAdmin, async (req, res) => {
   const username = String(req.params.username || '').trim().replace(/^@/, '').split(/[/?#]/)[0]
   if (!username) return res.status(400).json({ error: 'Missing username' })
 
@@ -1226,15 +1515,22 @@ app.post('/api/idea-creators/:username/refresh', async (req, res) => {
 })
 
 // 获取 ideaShell 视频
-app.get('/api/idea-videos', (req, res) => {
+app.get('/api/idea-videos', async (req, res) => {
   const options = {}
   if (req.query.creator) options.creator = req.query.creator
   if (req.query.limit) options.limit = parseInt(req.query.limit)
-  res.json({ videos: getIdeaVideos(options) })
+  try {
+    const creators = await localizeIdeaCreators(getIdeaCreators())
+    const videos = applyIdeaCreatorAvatars(getIdeaVideos(options), creators)
+    res.json({ videos })
+  } catch (err) {
+    console.error('[IdeaShell] Load videos error:', err.message)
+    res.status(500).json({ error: err.message || 'Load videos failed' })
+  }
 })
 
 // 首屏自动补抓已有博主的视频
-app.post('/api/idea-videos/backfill', async (_req, res) => {
+app.post('/api/idea-videos/backfill', requireAdmin, async (_req, res) => {
   try {
     const creators = getIdeaCreators()
     if (!creators.length) {
@@ -1252,7 +1548,7 @@ app.post('/api/idea-videos/backfill', async (_req, res) => {
 })
 
 // 手动抓取全部博主视频
-app.post('/api/idea-videos/fetch', async (_req, res) => {
+app.post('/api/idea-videos/fetch', requireAdmin, async (_req, res) => {
   try {
     const creators = getIdeaCreators()
     if (!creators.length) {
@@ -1283,8 +1579,11 @@ app.use((_req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'))
 })
 
-app.listen(PORT, async () => {
-  console.log(`✅ TikTok Radar API server on http://localhost:${PORT}`)
+app.listen(PORT, HOST, async () => {
+  console.log(`✅ TikTok Radar API server on http://${HOST}:${PORT}`)
+  if (!userExists()) {
+    console.log('⚠️ No users found. Run `node scripts/init_admin_user.cjs <username> <password> [display_name]` to create the first admin user.')
+  }
   console.log(`   API Key: ${TIKHUB_KEY ? TIKHUB_KEY.substring(0, 8) + '...' : '❌ NOT SET'}`)
   console.log(`   PATH: ${process.env.PATH}`)
   const [ytDlpDbg, ffmpegDbg] = await Promise.all([

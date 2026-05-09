@@ -91,6 +91,16 @@ db.exec(`
     detail TEXT,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
+    display_name TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
 `)
 
 for (const column of [
@@ -560,6 +570,66 @@ function getFeishuSyncLogs(limit = 20) {
   return db.prepare('SELECT * FROM feishu_sync_logs ORDER BY created_at DESC LIMIT ?').all(limit)
 }
 
+// --- users ---
+
+function userExists() {
+  const row = db.prepare('SELECT COUNT(*) as c FROM users').get()
+  return row.c > 0
+}
+
+function getUserByUsername(username) {
+  return db.prepare('SELECT id, username, password_hash, role, display_name, created_at, updated_at FROM users WHERE username = ?').get(String(username).toLowerCase())
+}
+
+function getUserById(id) {
+  return db.prepare('SELECT id, username, role, display_name, created_at, updated_at FROM users WHERE id = ?').get(id)
+}
+
+function getAllUsers() {
+  return db.prepare('SELECT id, username, role, display_name, created_at, updated_at FROM users ORDER BY created_at DESC').all()
+}
+
+function createUser({ username, passwordHash, role = 'user', displayName }) {
+  const ts = nowIso()
+  const normalized = String(username).toLowerCase().trim()
+  db.prepare(`
+    INSERT INTO users (username, password_hash, role, display_name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(normalized, passwordHash, role, displayName || normalized, ts, ts)
+  return getUserByUsername(normalized)
+}
+
+function deleteUser(id) {
+  db.prepare('DELETE FROM users WHERE id = ?').run(id)
+  return true
+}
+
+function updateUserPassword(id, passwordHash) {
+  const ts = nowIso()
+  db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(passwordHash, ts, id)
+  return true
+}
+
+function updateUser(id, { displayName, role }) {
+  const ts = nowIso()
+  const sets = []
+  const params = []
+  if (displayName !== undefined) {
+    sets.push('display_name = ?')
+    params.push(displayName)
+  }
+  if (role !== undefined) {
+    sets.push('role = ?')
+    params.push(role)
+  }
+  if (sets.length === 0) return null
+  sets.push('updated_at = ?')
+  params.push(ts)
+  params.push(id)
+  db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...params)
+  return getUserById(id)
+}
+
 module.exports = {
   DB_PATH,
   deleteApp,
@@ -594,4 +664,13 @@ module.exports = {
   markIdeaVideosSynced,
   saveFeishuSyncLog,
   getFeishuSyncLogs,
+  // users
+  userExists,
+  getUserByUsername,
+  getUserById,
+  getAllUsers,
+  createUser,
+  deleteUser,
+  updateUserPassword,
+  updateUser,
 }

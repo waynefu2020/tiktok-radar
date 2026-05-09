@@ -1,3 +1,15 @@
+import { authHeaders } from './auth'
+
+function apiFetch(url: string, init?: RequestInit) {
+  return fetch(url, {
+    ...init,
+    headers: {
+      ...authHeaders(),
+      ...(init?.headers || {}),
+    },
+  })
+}
+
 export interface FeishuConfig {
   appId: string
   appSecret: string
@@ -6,13 +18,13 @@ export interface FeishuConfig {
 }
 
 export async function getFeishuConfig(): Promise<{ appId: string; wikiUrl: string; configured: boolean; autoSyncEnabled: boolean }> {
-  const res = await fetch('/api/feishu/config')
+  const res = await apiFetch('/api/feishu/config')
   if (!res.ok) throw new Error(`Load config failed: HTTP ${res.status}`)
   return res.json()
 }
 
 export async function saveFeishuConfig(config: FeishuConfig) {
-  const res = await fetch('/api/feishu/config', {
+  const res = await apiFetch('/api/feishu/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
@@ -25,7 +37,7 @@ export async function saveFeishuConfig(config: FeishuConfig) {
 }
 
 export async function getFeishuFields(): Promise<{ name: string; type: number; field_id: string }[]> {
-  const res = await fetch('/api/feishu/fields')
+  const res = await apiFetch('/api/feishu/fields')
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
     throw new Error(err.error || 'Fetch fields failed')

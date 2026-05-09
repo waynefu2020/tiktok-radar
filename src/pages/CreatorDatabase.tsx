@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Users, Heart, Video, ArrowUpDown, Plus, RefreshCw, Trash2, X, Loader2, AlertCircle } from 'lucide-react'
 import TopBar from '../components/TopBar'
 import AppBadge from '../components/AppBadge'
+import { useAuth } from '../components/AuthProvider'
 
 import { AppId, AppConfig, Creator, Video as TikTokVideo } from '../types'
 import { fmt } from '../components/StatCard'
@@ -38,6 +39,7 @@ function buildCreators(videos: TikTokVideo[]): CreatorRow[] {
 }
 
 export default function CreatorDatabase() {
+  const { isAdmin } = useAuth()
   const [appFilter, setAppFilter] = useState<AppId | 'all'>('all')
   const [sortKey, setSortKey] = useState<SortKey>('followers')
   const [sortAsc, setSortAsc] = useState(false)
@@ -71,12 +73,11 @@ export default function CreatorDatabase() {
       .filter(creator => !hiddenUsernames.has(creator.username.toLowerCase()))
   }, [hiddenUsernames, localCreators, videos])
 
-  const loadRealVideos = async () => {
+  const loadRealVideos = async (syncRemote = false) => {
     setLoadError('')
     setLoadingVideos(true)
     try {
-      const existing = await getStoredVideos()
-      const cache = existing.videos.length > 0 ? existing : await syncAndCacheVideos()
+      const cache = syncRemote ? await syncAndCacheVideos() : await getStoredVideos()
       setVideos(cache.videos)
     } catch (err: any) {
       setLoadError(err.message || '获取真实视频失败')
@@ -208,20 +209,26 @@ export default function CreatorDatabase() {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.12)] text-[#C8CBE0] hover:bg-[rgba(99,102,241,0.2)] transition-colors"
-        >
-          <Plus size={13} /> 添加监控账号
-        </button>
-        <button
-          onClick={loadRealVideos}
-          disabled={loadingVideos}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#2E3045] text-[#8A8FA8] hover:text-[#C8CBE0] disabled:opacity-50 transition-colors"
-        >
-          {loadingVideos ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          同步真实达人
-        </button>
+        {isAdmin ? (
+          <>
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.12)] text-text-secondary hover:bg-[rgba(99,102,241,0.2)] transition-colors"
+            >
+              <Plus size={13} /> 添加监控账号
+            </button>
+            <button
+              onClick={() => loadRealVideos(true)}
+              disabled={loadingVideos}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border text-text-muted hover:text-text-secondary disabled:opacity-50 transition-colors"
+            >
+              {loadingVideos ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              同步真实达人
+            </button>
+          </>
+        ) : (
+          <div className="text-xs text-text-muted">普通成员仅查看已有达人数据。</div>
+        )}
       </div>
 
       {loadError && (
@@ -231,38 +238,38 @@ export default function CreatorDatabase() {
         </div>
       )}
 
-      <div className="rounded-xl border border-[#2E3045] overflow-hidden bg-[rgb(12,14,20)]">
+      <div className="rounded-xl border border-border overflow-hidden bg-bg">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[#2E3045]">
-              <th className="px-4 py-3 text-left text-[11px] font-medium text-[#8A8FA8]">达人</th>
-              <th className="px-3 py-3 text-left text-[11px] font-medium text-[#8A8FA8]">合作 App</th>
+            <tr className="border-b border-border">
+              <th className="px-4 py-3 text-left text-[11px] font-medium text-text-muted">达人</th>
+              <th className="px-3 py-3 text-left text-[11px] font-medium text-text-muted">合作 App</th>
               <th
-                className="px-3 py-3 text-left text-[11px] font-medium text-[#8A8FA8] cursor-pointer hover:text-[#C8CBE0] transition-colors select-none"
+                className="px-3 py-3 text-left text-[11px] font-medium text-text-muted cursor-pointer hover:text-text-secondary transition-colors select-none"
                 onClick={() => toggleSort('followers')}
               >
                 <div className="flex items-center gap-1">粉丝量 <ArrowUpDown size={10} /></div>
               </th>
               <th
-                className="px-3 py-3 text-left text-[11px] font-medium text-[#8A8FA8] cursor-pointer hover:text-[#C8CBE0] transition-colors select-none"
+                className="px-3 py-3 text-left text-[11px] font-medium text-text-muted cursor-pointer hover:text-text-secondary transition-colors select-none"
                 onClick={() => toggleSort('totalVideos')}
               >
                 <div className="flex items-center gap-1">视频数 <ArrowUpDown size={10} /></div>
               </th>
               <th
-                className="px-3 py-3 text-left text-[11px] font-medium text-[#8A8FA8] cursor-pointer hover:text-[#C8CBE0] transition-colors select-none"
+                className="px-3 py-3 text-left text-[11px] font-medium text-text-muted cursor-pointer hover:text-text-secondary transition-colors select-none"
                 onClick={() => toggleSort('avgLikes')}
               >
                 <div className="flex items-center gap-1">平均点赞 <ArrowUpDown size={10} /></div>
               </th>
-              <th className="px-3 py-3 text-left text-[11px] font-medium text-[#8A8FA8]">操作</th>
+              <th className="px-3 py-3 text-left text-[11px] font-medium text-text-muted">操作</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={6} className="text-center py-16 text-sm text-[#555873]">
-                  {loadingVideos ? '正在获取真实达人…' : '暂无真实达人，请同步真实数据或添加监控账号'}
+                  {loadingVideos ? '正在获取真实达人…' : isAdmin ? '暂无真实达人，请同步真实数据或添加监控账号' : '暂无真实达人，请等待管理员同步'}
                 </td>
               </tr>
             ) : filtered.map(creator => {
@@ -275,24 +282,24 @@ export default function CreatorDatabase() {
                         <img
                           src={creator.avatarUrl}
                           alt=""
-                          className="w-9 h-9 rounded-full shrink-0 bg-[rgb(28,30,42)]"
+                          className="w-9 h-9 rounded-full shrink-0 bg-panel"
                           onError={e => { (e.target as HTMLImageElement).src = creatorAvatarFallback(creator.username) }}
                         />
                       ) : (
-                        <div className="w-9 h-9 rounded-full shrink-0 bg-[rgb(28,30,42)] border border-[#2E3045] flex items-center justify-center text-xs text-[#8A8FA8]">
+                        <div className="w-9 h-9 rounded-full shrink-0 bg-panel border border-border flex items-center justify-center text-xs text-text-muted">
                           {creator.username.slice(0, 1).toUpperCase()}
                         </div>
                       )}
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <div className="text-sm text-white font-medium">{creator.displayName}</div>
+                          <div className="text-sm text-text-primary font-medium">{creator.displayName}</div>
                           {isLocal && <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 rounded px-1.5 py-0.5">监控中</span>}
                         </div>
                         <a
                           href={`https://www.tiktok.com/@${creator.username}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="block text-xs text-[#8A8FA8] hover:text-[#22D3EE] transition-colors truncate"
+                          className="block text-xs text-text-muted hover:text-[#22D3EE] transition-colors truncate"
                           title="打开 TikTok 达人主页"
                         >
                           @{creator.username}
@@ -306,43 +313,47 @@ export default function CreatorDatabase() {
                     </div>
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex items-center gap-1.5 text-sm text-[#C8CBE0]">
-                      <Users size={12} className="text-[#8A8FA8]" />
+                    <div className="flex items-center gap-1.5 text-sm text-text-secondary">
+                      <Users size={12} className="text-text-muted" />
                       {fmt(creator.followers)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex items-center gap-1.5 text-sm text-[#C8CBE0]">
-                      <Video size={12} className="text-[#8A8FA8]" />
+                    <div className="flex items-center gap-1.5 text-sm text-text-secondary">
+                      <Video size={12} className="text-text-muted" />
                       {creator.totalVideos}
                     </div>
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex items-center gap-1.5 text-sm text-[#C8CBE0]">
+                    <div className="flex items-center gap-1.5 text-sm text-text-secondary">
                       <Heart size={12} className="text-rose-400" />
                       {fmt(creator.avgLikes)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
-                      {isLocal && (
+                      {isAdmin && isLocal && (
                         <button
                           title="刷新资料"
                           onClick={() => handleRefreshCreator(creator as LocalCreator)}
                           disabled={refreshing === creator.username}
-                          className="w-7 h-7 rounded-md flex items-center justify-center bg-[rgb(28,30,42)] border border-[#2E3045] text-[#8A8FA8] hover:text-[#6366F1] hover:border-[#6366F1]/40 disabled:opacity-50 transition-colors"
+                          className="w-7 h-7 rounded-md flex items-center justify-center bg-panel border border-border text-text-muted hover:text-[#6366F1] hover:border-[#6366F1]/40 disabled:opacity-50 transition-colors"
                         >
                           {refreshing === creator.username ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                         </button>
                       )}
+                      {isAdmin ? (
                         <button
-                        title="删除达人"
-                        onClick={() => handleDeleteCreator(creator)}
-                        disabled={deleting === creator.username}
-                        className="w-7 h-7 rounded-md flex items-center justify-center bg-[rgb(28,30,42)] border border-[#2E3045] text-[#8A8FA8] hover:text-red-400 hover:border-red-500/40 disabled:opacity-50 transition-colors"
+                          title="删除达人"
+                          onClick={() => handleDeleteCreator(creator)}
+                          disabled={deleting === creator.username}
+                          className="w-7 h-7 rounded-md flex items-center justify-center bg-panel border border-border text-text-muted hover:text-red-400 hover:border-red-500/40 disabled:opacity-50 transition-colors"
                         >
-                        {deleting === creator.username ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                          {deleting === creator.username ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                         </button>
+                      ) : (
+                        <span className="text-xs text-text-muted">只读</span>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -356,17 +367,17 @@ export default function CreatorDatabase() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <form
             onSubmit={handleAddCreator}
-            className="w-full max-w-md rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] shadow-2xl"
+            className="w-full max-w-md rounded-xl border border-border bg-bg shadow-2xl"
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#2E3045]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div>
-                <div className="text-sm font-semibold text-white">添加监控账号</div>
-                <div className="text-xs text-[#8A8FA8] mt-0.5">从 TikHub 拉取 TikTok 达人资料</div>
+                <div className="text-sm font-semibold text-text-primary">添加监控账号</div>
+                <div className="text-xs text-text-muted mt-0.5">从 TikHub 拉取 TikTok 达人资料</div>
               </div>
               <button
                 type="button"
                 onClick={closeModal}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#8A8FA8] hover:text-[#C8CBE0] hover:bg-[rgb(28,30,42)] transition-colors"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-text-secondary hover:bg-panel transition-colors"
               >
                 <X size={16} />
               </button>
@@ -374,17 +385,17 @@ export default function CreatorDatabase() {
 
             <div className="p-5 space-y-4">
               <label className="block">
-                <span className="text-xs font-medium text-[#C8CBE0]">TikTok 账号</span>
+                <span className="text-xs font-medium text-text-secondary">TikTok 账号</span>
                 <input
                   value={usernameInput}
                   onChange={e => setUsernameInput(e.target.value)}
                   placeholder="@username 或 TikTok 主页链接"
-                  className="mt-2 w-full bg-[rgb(28,30,42)] border border-[#2E3045] rounded-lg px-3 py-2 text-sm text-[#C8CBE0] placeholder-[#555873] focus:outline-none focus:border-[#6366F1]/50 transition-colors"
+                  className="mt-2 w-full bg-panel border border-border rounded-lg px-3 py-2 text-sm text-text-secondary placeholder-text-muted/60 focus:outline-none focus:border-[#6366F1]/50 transition-colors"
                 />
               </label>
 
               <div>
-                <div className="text-xs font-medium text-[#C8CBE0] mb-2">关联竞品</div>
+                <div className="text-xs font-medium text-text-secondary mb-2">关联竞品</div>
                 <div className="flex flex-wrap gap-2">
                   {appConfigs.map(app => {
                     const active = selectedApps.includes(app.id)
@@ -396,7 +407,7 @@ export default function CreatorDatabase() {
                         className="px-3 py-1.5 rounded-lg text-xs border transition-colors"
                         style={active
                           ? { borderColor: app.borderColor, color: app.color, backgroundColor: app.bgColor }
-                          : { borderColor: '#2E3045', color: '#8A8FA8', backgroundColor: 'transparent' }}
+                          : { borderColor: 'var(--border)', color: 'var(--text-muted)', backgroundColor: 'transparent' }}
                       >
                         {app.name}
                       </button>
@@ -413,18 +424,18 @@ export default function CreatorDatabase() {
               )}
             </div>
 
-            <div className="flex justify-end gap-2 px-5 py-4 border-t border-[#2E3045]">
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
               <button
                 type="button"
                 onClick={closeModal}
-                className="px-3 py-1.5 rounded-lg text-xs border border-[#2E3045] text-[#8A8FA8] hover:text-[#C8CBE0] transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs border border-border text-text-muted hover:text-text-secondary transition-colors"
               >
                 取消
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[#6366F1]/40 bg-[rgba(99,102,241,0.12)] text-[#C8CBE0] hover:bg-[rgba(99,102,241,0.2)] disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[#6366F1]/40 bg-[rgba(99,102,241,0.12)] text-text-secondary hover:bg-[rgba(99,102,241,0.2)] disabled:opacity-50 transition-colors"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
                 {saving ? '拉取中' : '添加'}

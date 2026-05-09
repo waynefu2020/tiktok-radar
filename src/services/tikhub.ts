@@ -1,4 +1,15 @@
 import { Video, AppId, Creator, ScriptBreakdown, AppConfig } from '../types'
+import { authHeaders } from './auth'
+
+function apiFetch(url: string, init?: RequestInit) {
+  return fetch(url, {
+    ...init,
+    headers: {
+      ...authHeaders(),
+      ...(init?.headers || {}),
+    },
+  })
+}
 
 export interface VideoCache {
   videos: Video[]
@@ -48,10 +59,39 @@ export interface HealthStatus {
 }
 
 export async function getApps(): Promise<AppConfig[]> {
-  const res = await fetch('/api/apps')
+  const res = await apiFetch('/api/apps')
   if (!res.ok) throw new Error(`Load apps failed: HTTP ${res.status}`)
   const data = await res.json()
   return data.apps || []
+}
+
+export async function createApp(app: {
+  id: string
+  name: string
+  color: string
+  bgColor: string
+  borderColor: string
+  keywords: string[]
+}): Promise<AppConfig> {
+  const res = await apiFetch('/api/apps', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(app),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(err.error || 'Create app failed')
+  }
+  const data = await res.json()
+  return data.app
+}
+
+export async function removeApp(id: string): Promise<void> {
+  const res = await apiFetch(`/api/apps/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(err.error || 'Delete app failed')
+  }
 }
 
 function videoTime(video: Video) {
@@ -68,7 +108,7 @@ function syncedAtFromMeta(meta: any): string {
 }
 
 export async function getStoredVideos(): Promise<VideoCache> {
-  const res = await fetch('/api/videos')
+  const res = await apiFetch('/api/videos')
   if (!res.ok) throw new Error(`Load videos failed: HTTP ${res.status}`)
   const data = await res.json()
   return {
@@ -78,7 +118,7 @@ export async function getStoredVideos(): Promise<VideoCache> {
 }
 
 export async function syncApp(appId: AppId, count = 20): Promise<SyncResult> {
-  const res = await fetch(`/api/sync/${appId}?count=${count}`)
+  const res = await apiFetch(`/api/sync/${appId}?count=${count}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
     throw new Error(err.error || `Sync failed for ${appId}`)
@@ -88,7 +128,7 @@ export async function syncApp(appId: AppId, count = 20): Promise<SyncResult> {
 }
 
 export async function syncAll(): Promise<BatchSyncResult> {
-  const res = await fetch('/api/sync')
+  const res = await apiFetch('/api/sync')
   if (!res.ok) {
     throw new Error(`Batch sync failed: HTTP ${res.status}`)
   }
@@ -102,7 +142,7 @@ export async function syncAndCacheVideos(): Promise<VideoCache> {
 }
 
 export async function loadVideoScripts(): Promise<Record<string, VideoScriptDraft>> {
-  const res = await fetch('/api/video-scripts')
+  const res = await apiFetch('/api/video-scripts')
   if (!res.ok) throw new Error(`Load scripts failed: HTTP ${res.status}`)
   const data = await res.json()
   const entries = (data.scripts || []).map((row: any) => [
@@ -122,7 +162,7 @@ export async function loadVideoScripts(): Promise<Record<string, VideoScriptDraf
 }
 
 export async function saveVideoScript(videoId: string, draft: VideoScriptDraft) {
-  const res = await fetch(`/api/video-scripts/${encodeURIComponent(videoId)}`, {
+  const res = await apiFetch(`/api/video-scripts/${encodeURIComponent(videoId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(draft),
@@ -154,7 +194,7 @@ export async function applySavedScripts(videos: Video[]): Promise<Video[]> {
 }
 
 export async function analyzeVideoScript(videoId: string): Promise<Video> {
-  const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}/analyze-script`, { method: 'POST' })
+  const res = await apiFetch(`/api/videos/${encodeURIComponent(videoId)}/analyze-script`, { method: 'POST' })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
     throw new Error(err.error || 'Analyze script failed')
@@ -164,21 +204,21 @@ export async function analyzeVideoScript(videoId: string): Promise<Video> {
 }
 
 export async function getMonitoredCreators(): Promise<MonitoredCreator[]> {
-  const res = await fetch('/api/monitored-creators')
+  const res = await apiFetch('/api/monitored-creators')
   if (!res.ok) throw new Error(`Load monitored creators failed: HTTP ${res.status}`)
   const data = await res.json()
   return data.creators || []
 }
 
 export async function getHiddenCreators(): Promise<HiddenCreator[]> {
-  const res = await fetch('/api/hidden-creators')
+  const res = await apiFetch('/api/hidden-creators')
   if (!res.ok) throw new Error(`Load hidden creators failed: HTTP ${res.status}`)
   const data = await res.json()
   return data.creators || []
 }
 
 export async function saveMonitoredCreator(username: string, apps: AppId[]): Promise<MonitoredCreator> {
-  const res = await fetch('/api/monitored-creators', {
+  const res = await apiFetch('/api/monitored-creators', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, apps }),
@@ -192,12 +232,12 @@ export async function saveMonitoredCreator(username: string, apps: AppId[]): Pro
 }
 
 export async function deleteMonitoredCreator(username: string) {
-  const res = await fetch(`/api/monitored-creators/${encodeURIComponent(username)}`, { method: 'DELETE' })
+  const res = await apiFetch(`/api/monitored-creators/${encodeURIComponent(username)}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`Delete monitored creator failed: HTTP ${res.status}`)
 }
 
 export async function deleteCreator(username: string) {
-  const res = await fetch(`/api/creators/${encodeURIComponent(username)}`, { method: 'DELETE' })
+  const res = await apiFetch(`/api/creators/${encodeURIComponent(username)}`, { method: 'DELETE' })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
     throw new Error(err.error || `Delete creator failed: HTTP ${res.status}`)
@@ -205,7 +245,7 @@ export async function deleteCreator(username: string) {
 }
 
 export async function getHealth(): Promise<HealthStatus> {
-  const res = await fetch('/api/health')
+  const res = await apiFetch('/api/health')
   if (!res.ok) throw new Error(`Health check failed: HTTP ${res.status}`)
   return res.json()
 }
@@ -230,7 +270,7 @@ export async function fetchCreator(username: string): Promise<Creator> {
   const parsed = parseTikTokUsername(username)
   if (!parsed) throw new Error('请输入 TikTok 账号')
 
-  const res = await fetch(`/api/creator/${encodeURIComponent(parsed)}`)
+  const res = await apiFetch(`/api/creator/${encodeURIComponent(parsed)}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
     throw new Error(err.error || `Fetch creator failed: HTTP ${res.status}`)
@@ -255,13 +295,13 @@ export interface WeeklyReport {
 
 export async function getViralVideos(since?: string): Promise<ViralVideosResponse> {
   const url = since ? `/api/viral-videos?since=${encodeURIComponent(since)}` : '/api/viral-videos'
-  const res = await fetch(url)
+  const res = await apiFetch(url)
   if (!res.ok) throw new Error(`Get viral videos failed: HTTP ${res.status}`)
   return res.json()
 }
 
 export async function getWeeklyReport(): Promise<WeeklyReport> {
-  const res = await fetch('/api/weekly-report')
+  const res = await apiFetch('/api/weekly-report')
   if (!res.ok) throw new Error(`Get weekly report failed: HTTP ${res.status}`)
   return res.json()
 }

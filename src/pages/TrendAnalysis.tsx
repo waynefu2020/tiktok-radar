@@ -2,15 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react'
 import TopBar from '../components/TopBar'
+import { useAuth } from '../components/AuthProvider'
 
 import { AppConfig, Video } from '../types'
 import { getApps, getStoredVideos, syncAndCacheVideos } from '../services/tikhub'
 
 const tooltipStyle = {
-  backgroundColor: 'rgb(28,30,42)',
-  border: '1px solid #2E3045',
+  backgroundColor: 'var(--panel)',
+  border: '1px solid var(--border)',
   borderRadius: 8,
-  color: '#C8CBE0',
+  color: 'var(--text-secondary)',
   fontSize: 12,
 }
 
@@ -65,6 +66,7 @@ function buildWeeklyData(videos: Video[], appIds: string[]) {
 }
 
 export default function TrendAnalysis() {
+  const { isAdmin } = useAuth()
   const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -74,12 +76,11 @@ export default function TrendAnalysis() {
     getApps().then(setAppConfigs).catch(() => {})
   }, [])
 
-  const loadVideos = async () => {
+  const loadVideos = async (syncRemote = false) => {
     setError('')
     setLoading(true)
     try {
-      const existing = await getStoredVideos()
-      const cache = existing.videos.length > 0 ? existing : await syncAndCacheVideos()
+      const cache = syncRemote ? await syncAndCacheVideos() : await getStoredVideos()
       setVideos(cache.videos)
     } catch (err: any) {
       setError(err.message || '获取真实趋势数据失败')
@@ -126,14 +127,18 @@ export default function TrendAnalysis() {
       <TopBar title="趋势分析" subtitle={hasData ? `${videos.length} 条 TikHub 真实视频` : '正在加载真实趋势数据'} />
 
       <div className="mt-6 mb-4 flex items-center gap-3">
-        <button
-          onClick={loadVideos}
-          disabled={loading}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 transition-colors"
-        >
-          {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          同步真实数据
-        </button>
+        {isAdmin ? (
+          <button
+            onClick={() => loadVideos(true)}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 transition-colors"
+          >
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            同步真实数据
+          </button>
+        ) : (
+          <div className="text-xs text-text-muted">普通成员仅查看已有缓存趋势数据。</div>
+        )}
         {error && (
           <div className="flex items-center gap-1.5 text-xs text-red-400">
             <AlertCircle size={13} /> {error}
@@ -142,21 +147,21 @@ export default function TrendAnalysis() {
       </div>
 
       {!hasData && !loading ? (
-        <div className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] py-16 text-center text-sm text-[#555873]">
-          暂无真实趋势数据，请检查 API 后重试同步
+        <div className="rounded-xl border border-border bg-bg py-16 text-center text-sm text-[#555873]">
+          {isAdmin ? '暂无真实趋势数据，请手动同步后查看' : '暂无真实趋势数据，请等待管理员同步'}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-6">
-          <div className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] p-5">
-            <h3 className="text-sm font-semibold text-white mb-1">最近 8 周新增视频量</h3>
-            <p className="text-xs text-[#8A8FA8] mb-4">按真实视频发布时间聚合，横轴为每周起始日期</p>
+          <div className="rounded-xl border border-border bg-bg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-1">最近 8 周新增视频量</h3>
+            <p className="text-xs text-text-muted mb-4">按真实视频发布时间聚合，横轴为每周起始日期</p>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={weeklyData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2E3045" />
-                <XAxis dataKey="week" tick={{ fill: '#8A8FA8', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#8A8FA8', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="week" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Legend wrapperStyle={{ fontSize: 11, color: '#8A8FA8' }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-muted)' }} />
                 {appConfigs.map(app => (
                   <Line
                     key={app.id}
@@ -173,14 +178,14 @@ export default function TrendAnalysis() {
             </ResponsiveContainer>
           </div>
 
-          <div className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] p-5">
-            <h3 className="text-sm font-semibold text-white mb-1">累计点赞量对比</h3>
-            <p className="text-xs text-[#8A8FA8] mb-4">各 App 真实视频总点赞（百万）</p>
+          <div className="rounded-xl border border-border bg-bg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-1">累计点赞量对比</h3>
+            <p className="text-xs text-text-muted mb-4">各 App 真实视频总点赞（百万）</p>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={appVideoCount} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2E3045" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: '#8A8FA8', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#8A8FA8', fontSize: 11 }} axisLine={false} tickLine={false} unit="M" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} unit="M" />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${v}M`, '点赞']} />
                 <Bar dataKey="likes" radius={[4, 4, 0, 0]}>
                   {appVideoCount.map(entry => <Cell key={entry.name} fill={entry.color} />)}
@@ -189,37 +194,37 @@ export default function TrendAnalysis() {
             </ResponsiveContainer>
           </div>
 
-          <div className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] p-5">
-            <h3 className="text-sm font-semibold text-white mb-1">热门标签 TOP 12</h3>
-            <p className="text-xs text-[#8A8FA8] mb-4">来自 TikHub 真实视频标签</p>
+          <div className="rounded-xl border border-border bg-bg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-1">热门标签 TOP 12</h3>
+            <p className="text-xs text-text-muted mb-4">来自 TikHub 真实视频标签</p>
             <div className="flex flex-wrap gap-2">
               {popularTags.map(({ tag, count }) => (
-                <div key={tag} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border border-[#2E3045] bg-[rgb(28,30,42)]">
-                  <span className="text-[#C8CBE0]">#{tag}</span>
+                <div key={tag} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border border-border bg-panel">
+                  <span className="text-text-secondary">#{tag}</span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-[rgba(99,102,241,0.15)] text-[#818CF8]">{count}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] p-5">
-            <h3 className="text-sm font-semibold text-white mb-1">各 App 数据概览</h3>
-            <p className="text-xs text-[#8A8FA8] mb-4">真实视频数量 & 平均点赞</p>
+          <div className="rounded-xl border border-border bg-bg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-1">各 App 数据概览</h3>
+            <p className="text-xs text-text-muted mb-4">真实视频数量 & 平均点赞</p>
             <div className="space-y-3">
               {appConfigs.map(app => {
                 const row = appVideoCount.find(v => v.name === app.name)!
                 return (
                   <div key={app.id} className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: app.color }} />
-                    <span className="text-sm text-[#C8CBE0] w-28 shrink-0">{app.name}</span>
-                    <div className="flex-1 h-2 bg-[rgb(28,30,42)] rounded-full overflow-hidden">
+                    <span className="text-sm text-text-secondary w-28 shrink-0">{app.name}</span>
+                    <div className="flex-1 h-2 bg-panel rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full"
                         style={{ width: `${videos.length ? (row.count / videos.length) * 100 : 0}%`, backgroundColor: app.color, opacity: 0.7 }}
                       />
                     </div>
-                    <span className="text-xs text-[#8A8FA8] w-16 text-right shrink-0">{row.count} 条视频</span>
-                    <span className="text-xs text-[#8A8FA8] w-20 text-right shrink-0">均赞 {(row.avgLikes / 1000).toFixed(0)}K</span>
+                    <span className="text-xs text-text-muted w-16 text-right shrink-0">{row.count} 条视频</span>
+                    <span className="text-xs text-text-muted w-20 text-right shrink-0">均赞 {(row.avgLikes / 1000).toFixed(0)}K</span>
                   </div>
                 )
               })}

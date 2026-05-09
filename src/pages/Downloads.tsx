@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, ExternalLink, Image, Loader2, RefreshCw, Video as VideoIcon } from 'lucide-react'
 import TopBar from '../components/TopBar'
 import AppBadge from '../components/AppBadge'
+import { useAuth } from '../components/AuthProvider'
 import { fmt } from '../components/StatCard'
 import { AppConfig, Video } from '../types'
 import { getApps, getStoredVideos, sortVideosByNewest, syncAndCacheVideos } from '../services/tikhub'
 import { videoThumbnailFallback } from '../utils/media'
 
 export default function Downloads() {
+  const { isAdmin } = useAuth()
   const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -19,12 +21,11 @@ export default function Downloads() {
     getApps().then(setAppConfigs).catch(() => {})
   }, [])
 
-  const loadVideos = async () => {
+  const loadVideos = async (syncRemote = false) => {
     setError('')
     setLoading(true)
     try {
-      const existing = await getStoredVideos()
-      const cache = existing.videos.length > 0 ? existing : await syncAndCacheVideos()
+      const cache = syncRemote ? await syncAndCacheVideos() : await getStoredVideos()
       setVideos(cache.videos)
     } catch (err: any) {
       setError(err.message || '获取真实素材失败')
@@ -42,14 +43,18 @@ export default function Downloads() {
       <TopBar title="素材下载" subtitle={videos.length ? `${videos.length} 条真实视频素材` : '正在加载真实视频素材'} />
 
       <div className="mt-6 mb-4 flex items-center gap-3">
-        <button
-          onClick={loadVideos}
-          disabled={loading}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 transition-colors"
-        >
-          {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          同步真实素材
-        </button>
+        {isAdmin ? (
+          <button
+            onClick={() => loadVideos(true)}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 transition-colors"
+          >
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            同步真实素材
+          </button>
+        ) : (
+          <div className="text-xs text-text-muted">普通成员仅查看已有缓存素材。</div>
+        )}
         {error && (
           <div className="flex items-center gap-1.5 text-xs text-red-400">
             <AlertCircle size={13} /> {error}
@@ -58,31 +63,31 @@ export default function Downloads() {
       </div>
 
       {sorted.length === 0 ? (
-        <div className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] py-16 text-center text-sm text-[#555873]">
-          {loading ? '正在获取真实素材…' : '暂无真实素材，请检查 API 后重试同步'}
+        <div className="rounded-xl border border-border bg-bg py-16 text-center text-sm text-[#555873]">
+          {loading ? '正在获取真实素材…' : isAdmin ? '暂无真实素材，请手动同步后查看' : '暂无真实素材，请等待管理员同步'}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
           {sorted.map(video => (
-            <div key={video.id} className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] p-4 flex items-start gap-4">
+            <div key={video.id} className="rounded-xl border border-border bg-bg p-4 flex items-start gap-4">
               <img
                 src={video.thumbnailUrl || videoThumbnailFallback(video.title)}
                 alt=""
-                className="w-28 h-36 rounded-lg object-cover shrink-0 bg-[rgb(28,30,42)]"
+                className="w-28 h-36 rounded-lg object-cover shrink-0 bg-panel"
                 loading="lazy"
                 onError={e => { (e.target as HTMLImageElement).src = videoThumbnailFallback(video.title) }}
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2">
                   <AppBadge app={video.app} size="sm" configs={appConfigs} />
-                  <span className="text-xs text-[#8A8FA8]">@{video.creator.username}</span>
+                  <span className="text-xs text-text-muted">@{video.creator.username}</span>
                   <span className="text-xs text-[#555873]">{video.publishedAt}</span>
                 </div>
-                <div className="text-sm font-medium text-white leading-snug line-clamp-2 mb-2">{video.title}</div>
+                <div className="text-sm font-medium text-text-primary leading-snug line-clamp-2 mb-2">{video.title}</div>
                 <div className="flex flex-wrap gap-1 mb-3">
                   {video.tags.slice(0, 4).map(tag => <span key={tag} className="tag-badge">#{tag}</span>)}
                 </div>
-                <div className="flex items-center gap-3 text-xs text-[#8A8FA8] mb-4">
+                <div className="flex items-center gap-3 text-xs text-text-muted mb-4">
                   <span>{fmt(video.likes)} 赞</span>
                   <span>{fmt(video.comments)} 评论</span>
                   <span>{fmt(video.shares)} 分享</span>
@@ -93,7 +98,7 @@ export default function Downloads() {
                       href={video.thumbnailUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#2E3045] text-[#8A8FA8] hover:text-[#C8CBE0] transition-colors"
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border text-text-muted hover:text-text-secondary transition-colors"
                     >
                       <Image size={12} /> 打开封面
                     </a>
@@ -102,7 +107,7 @@ export default function Downloads() {
                     href={video.tiktokUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#2E3045] text-[#8A8FA8] hover:text-[#22D3EE] transition-colors"
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border text-text-muted hover:text-[#22D3EE] transition-colors"
                   >
                     <ExternalLink size={12} /> 原视频
                   </a>

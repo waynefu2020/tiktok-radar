@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
@@ -7,15 +8,15 @@ export default {
         sans: ['Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       colors: {
-        bg: '#0A0C10',
-        sidebar: 'rgba(20, 22, 31, 0.95)',
-        border: '#2E3045',
-        card: 'rgb(42, 45, 62)',
-        panel: 'rgb(28, 30, 42)',
-        accent: '#6366F1',
-        'text-primary': '#FFFFFF',
-        'text-secondary': '#C8CBE0',
-        'text-muted': '#8A8FA8',
+        bg: 'var(--bg)',
+        sidebar: 'var(--sidebar)',
+        border: 'var(--border)',
+        card: 'var(--card)',
+        panel: 'var(--panel)',
+        accent: 'var(--accent)',
+        'text-primary': 'var(--text-primary)',
+        'text-secondary': 'var(--text-secondary)',
+        'text-muted': 'var(--text-muted)',
       },
     },
   },

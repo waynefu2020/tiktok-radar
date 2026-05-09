@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, Copy, ExternalLink, ChevronDown, ChevronUp, Pencil, Save, Loader2, RefreshCw, Sparkles, Mic, FileText } from 'lucide-react'
 import TopBar from '../components/TopBar'
 import AppBadge from '../components/AppBadge'
+import { useAuth } from '../components/AuthProvider'
 
 import { AppId, AppConfig, ScriptBreakdown, Video } from '../types'
 import { applySavedScripts, getApps, getStoredVideos, saveVideoScript, syncAndCacheVideos } from '../services/tikhub'
@@ -38,31 +39,31 @@ function SourceBadge({ source }: { source?: string }) {
 function BreakdownView({ breakdown }: { breakdown: ScriptBreakdown }) {
   return (
     <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-        <div className="text-[#8A8FA8] mb-1">开场钩子</div>
-        <div className="text-[#C8CBE0] leading-relaxed">{breakdown.hook}</div>
+      <div className="rounded-lg bg-panel border border-border p-3">
+        <div className="text-text-muted mb-1">开场钩子</div>
+        <div className="text-text-secondary leading-relaxed">{breakdown.hook}</div>
       </div>
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-        <div className="text-[#8A8FA8] mb-1">痛点</div>
-        <div className="text-[#C8CBE0] leading-relaxed">{breakdown.painPoint}</div>
+      <div className="rounded-lg bg-panel border border-border p-3">
+        <div className="text-text-muted mb-1">痛点</div>
+        <div className="text-text-secondary leading-relaxed">{breakdown.painPoint}</div>
       </div>
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3 col-span-2">
-        <div className="text-[#8A8FA8] mb-2">内容结构</div>
-        <ol className="space-y-1 text-[#C8CBE0] list-decimal list-inside">
+      <div className="rounded-lg bg-panel border border-border p-3 col-span-2">
+        <div className="text-text-muted mb-2">内容结构</div>
+        <ol className="space-y-1 text-text-secondary list-decimal list-inside">
           {breakdown.structure.map((item, idx) => <li key={idx}>{item}</li>)}
         </ol>
       </div>
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-        <div className="text-[#8A8FA8] mb-1">产品植入</div>
-        <div className="text-[#C8CBE0] leading-relaxed">{breakdown.productPlacement}</div>
+      <div className="rounded-lg bg-panel border border-border p-3">
+        <div className="text-text-muted mb-1">产品植入</div>
+        <div className="text-text-secondary leading-relaxed">{breakdown.productPlacement}</div>
       </div>
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3">
-        <div className="text-[#8A8FA8] mb-1">CTA</div>
-        <div className="text-[#C8CBE0] leading-relaxed">{breakdown.cta}</div>
+      <div className="rounded-lg bg-panel border border-border p-3">
+        <div className="text-text-muted mb-1">CTA</div>
+        <div className="text-text-secondary leading-relaxed">{breakdown.cta}</div>
       </div>
-      <div className="rounded-lg bg-[rgb(18,20,28)] border border-[#2E3045] p-3 col-span-2">
-        <div className="text-[#8A8FA8] mb-2">可复用拍摄建议</div>
-        <ul className="space-y-1 text-[#C8CBE0] list-disc list-inside">
+      <div className="rounded-lg bg-panel border border-border p-3 col-span-2">
+        <div className="text-text-muted mb-2">可复用拍摄建议</div>
+        <ul className="space-y-1 text-text-secondary list-disc list-inside">
           {breakdown.reusableIdeas.map((item, idx) => <li key={idx}>{item}</li>)}
         </ul>
       </div>
@@ -97,12 +98,12 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
   const source = video.analysisSource || 'transcript'
 
   return (
-    <div className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] overflow-hidden">
+    <div className="rounded-xl border border-border bg-bg overflow-hidden">
       <div
-        className="flex items-start gap-4 p-4 cursor-pointer hover:bg-[rgb(18,20,28)] transition-colors"
+        className="flex items-start gap-4 p-4 cursor-pointer hover:bg-panel transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
-        <div className="w-20 h-11 rounded-lg shrink-0 bg-[rgb(28,30,42)] overflow-hidden">
+        <div className="w-20 h-11 rounded-lg shrink-0 bg-panel overflow-hidden">
           <img
             src={thumbnailSrc}
             alt=""
@@ -112,7 +113,7 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2 mb-1.5">
-            <p className="text-sm text-white leading-snug flex-1 line-clamp-2">{video.title}</p>
+            <p className="text-sm text-text-primary leading-snug flex-1 line-clamp-2">{video.title}</p>
             {hook && (
               <span
                 className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border font-medium"
@@ -124,21 +125,21 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <AppBadge app={video.app} size="sm" configs={appConfigs} />
-            <span className="text-xs text-[#8A8FA8]">@{video.creator.username}</span>
+            <span className="text-xs text-text-muted">@{video.creator.username}</span>
             <span className="text-xs text-[#555873]">{video.publishedAt}</span>
             {hasContent && <SourceBadge source={source} />}
           </div>
         </div>
-        <div className="shrink-0 text-[#8A8FA8]">
+        <div className="shrink-0 text-text-muted">
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </div>
 
       {expanded && (
-        <div className="border-t border-[#2E3045]/60 p-4 bg-[rgb(10,12,16)]">
+        <div className="border-t border-border/60 p-4 bg-bg">
           {/* 钩子类型选择 */}
           <div className="mb-3 flex items-center gap-2">
-            <span className="text-xs text-[#8A8FA8]">钩子类型</span>
+            <span className="text-xs text-text-muted">钩子类型</span>
             <select
               value={hookType ?? ''}
               onChange={e => {
@@ -146,7 +147,7 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
                 setHookType(next)
                 saveVideoScript(video.id, { hookType: next })
               }}
-              className="bg-[rgb(18,20,28)] border border-[#2E3045] rounded-lg px-2 py-1 text-xs text-[#C8CBE0] focus:outline-none focus:border-[#6366F1]/50 cursor-pointer"
+              className="bg-panel border border-border rounded-lg px-2 py-1 text-xs text-text-secondary focus:outline-none focus:border-[#6366F1]/50 cursor-pointer"
             >
               <option value="">未分类</option>
               {Object.entries(HOOK_LABELS).map(([value, item]) => (
@@ -158,7 +159,7 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
           {/* 脚本原文 / 逐字稿 */}
           <div className="mb-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[#8A8FA8] font-medium">脚本原文 / 逐字稿</span>
+              <span className="text-xs text-text-muted font-medium">脚本原文 / 逐字稿</span>
               {video.transcriptText && (
                 <span className="text-[10px] text-[#555873]">
                   {video.transcriptText.length} 字符 · {source === 'asr' ? 'Whisper 转写' : source === 'inferred' ? 'AI 推测' : 'TikHub 字幕'}
@@ -166,11 +167,11 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
               )}
             </div>
             {video.transcriptText ? (
-              <pre className="text-xs text-[#C8CBE0] whitespace-pre-wrap leading-relaxed font-sans bg-[rgb(18,20,28)] border border-[#2E3045] rounded-lg p-3 max-h-60 overflow-auto">
+              <pre className="text-xs text-text-secondary whitespace-pre-wrap leading-relaxed font-sans bg-panel border border-border rounded-lg p-3 max-h-60 overflow-auto">
                 {video.transcriptText}
               </pre>
             ) : (
-              <div className="text-xs text-[#555873] italic bg-[rgb(18,20,28)] border border-[#2E3045] rounded-lg p-3">
+              <div className="text-xs text-[#555873] italic bg-panel border border-border rounded-lg p-3">
                 暂无逐字稿。前往 UGC 视频中心点击脚本按钮，可生成 AI 转写或推测拆解。
               </div>
             )}
@@ -180,7 +181,7 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
           {video.breakdown && (
             <div className="mb-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-[#8A8FA8] font-medium">AI 拆解</span>
+                <span className="text-xs text-text-muted font-medium">AI 拆解</span>
                 <SourceBadge source={source} />
               </div>
               <BreakdownView breakdown={video.breakdown} />
@@ -190,20 +191,20 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
           {/* 复刻备注（可编辑） */}
           <div className="mb-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[#8A8FA8] font-medium">复刻备注</span>
+              <span className="text-xs text-text-muted font-medium">复刻备注</span>
             </div>
             {editing ? (
               <textarea
                 value={noteText}
                 onChange={e => setNoteText(e.target.value)}
-                className="w-full bg-[rgb(18,20,28)] border border-[#6366F1]/40 rounded-lg p-3 text-xs text-[#C8CBE0] leading-relaxed font-sans resize-none focus:outline-none"
+                className="w-full bg-panel border border-[#6366F1]/40 rounded-lg p-3 text-xs text-text-secondary leading-relaxed font-sans resize-none focus:outline-none"
                 rows={4}
                 placeholder="添加你的复刻笔记、拍摄思路、修改建议..."
               />
             ) : (
               <div
                 onClick={() => setEditing(true)}
-                className="text-xs text-[#C8CBE0] leading-relaxed font-sans bg-[rgb(18,20,28)] border border-[#2E3045] rounded-lg p-3 min-h-[3rem] cursor-text hover:border-[#6366F1]/30 transition-colors"
+                className="text-xs text-text-secondary leading-relaxed font-sans bg-panel border border-border rounded-lg p-3 min-h-[3rem] cursor-text hover:border-[#6366F1]/30 transition-colors"
               >
                 {video.script ? video.script : <span className="text-[#555873] italic">点击添加复刻备注...</span>}
               </div>
@@ -222,7 +223,7 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
             </button>
             <button
               onClick={editing ? handleSave : () => setEditing(true)}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[rgb(28,30,42)] border border-[#2E3045] text-[#8A8FA8] hover:text-[#C8CBE0] transition-colors"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-panel border border-border text-text-muted hover:text-text-secondary transition-colors"
             >
               {editing ? <><Save size={12} /> 保存备注</> : <><Pencil size={12} /> 添加备注</>}
             </button>
@@ -230,7 +231,7 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
               href={video.tiktokUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[rgb(28,30,42)] border border-[#2E3045] text-[#8A8FA8] hover:text-[#22D3EE] transition-colors ml-auto"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-panel border border-border text-text-muted hover:text-[#22D3EE] transition-colors ml-auto"
             >
               <ExternalLink size={12} /> 看原视频
             </a>
@@ -242,6 +243,7 @@ function ScriptCard({ video, appConfigs, onSaved }: { video: Video; appConfigs: 
 }
 
 export default function ScriptLibrary() {
+  const { isAdmin } = useAuth()
   const [appFilter, setAppFilter] = useState<AppId | 'all'>('all')
   const [hookFilter, setHookFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
@@ -259,12 +261,11 @@ export default function ScriptLibrary() {
     setVideos(await applySavedScripts(cache.videos))
   }
 
-  const loadVideos = async () => {
+  const loadVideos = async (syncRemote = false) => {
     setError('')
     setLoading(true)
     try {
-      const existing = await getStoredVideos()
-      const cache = existing.videos.length > 0 ? existing : await syncAndCacheVideos()
+      const cache = syncRemote ? await syncAndCacheVideos() : await getStoredVideos()
       setVideos(await applySavedScripts(cache.videos))
     } catch (err: any) {
       setError(err.message || '获取真实视频失败')
@@ -295,14 +296,18 @@ export default function ScriptLibrary() {
       />
 
       <div className="mt-6 flex items-center gap-3 flex-wrap mb-5">
-        <button
-          onClick={loadVideos}
-          disabled={loading}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 transition-colors"
-        >
-          {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          同步真实视频
-        </button>
+        {isAdmin ? (
+          <button
+            onClick={() => loadVideos(true)}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#6366F1]/40 bg-[rgba(99,102,241,0.08)] text-[#818CF8] hover:bg-[rgba(99,102,241,0.15)] disabled:opacity-40 transition-colors"
+          >
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            同步真实视频
+          </button>
+        ) : (
+          <div className="text-xs text-text-muted">普通成员仅查看已有脚本和备注数据。</div>
+        )}
         {error && (
           <div className="flex items-center gap-1.5 text-xs text-red-400">
             <AlertCircle size={13} /> {error}
@@ -353,8 +358,8 @@ export default function ScriptLibrary() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-[#2E3045] bg-[rgb(12,14,20)] py-16 text-center text-sm text-[#555873]">
-          {loading ? '正在获取真实视频…' : '暂无真实视频可拆解，请检查 API 后重试同步'}
+        <div className="rounded-xl border border-border bg-bg py-16 text-center text-sm text-[#555873]">
+          {loading ? '正在获取真实视频…' : isAdmin ? '暂无真实视频可拆解，请手动同步后查看' : '暂无脚本数据，请等待管理员同步或分析'}
         </div>
       ) : (
         <div className="space-y-3">

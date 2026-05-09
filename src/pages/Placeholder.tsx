@@ -14,8 +14,8 @@ export default function Placeholder({ title, subtitle }: Props) {
         <div className="w-12 h-12 rounded-xl gradient-bg flex items-center justify-center">
           <Construction size={22} className="text-white" />
         </div>
-        <p className="text-sm text-[#C8CBE0] font-medium">{title}</p>
-        <p className="text-xs text-[#8A8FA8]">功能正在建设中，敬请期待</p>
+        <p className="text-sm text-text-secondary font-medium">{title}</p>
+        <p className="text-xs text-text-muted">功能正在建设中，敬请期待</p>
       </div>
     </div>
   )

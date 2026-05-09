@@ -60,66 +60,66 @@ export default function WeeklyReport() {
             <TrendingUp size={18} />
             <span className="text-sm font-medium">爆款视频</span>
           </div>
-          <div className="text-3xl font-bold text-white">{viralCount}</div>
+          <div className="text-3xl font-bold text-text-primary">{viralCount}</div>
           <div className="text-xs text-rose-300/70 mt-1">本周发现</div>
         </div>
 
-        <div className="bg-[#1c1e2a] border border-[#2E3045] rounded-xl p-5">
-          <div className="flex items-center gap-2 text-[#8A8FA8] mb-2">
+        <div className="bg-bg border border-border rounded-xl p-5">
+          <div className="flex items-center gap-2 text-text-muted mb-2">
             <Heart size={18} />
             <span className="text-sm font-medium">最高点赞</span>
           </div>
-          <div className="text-3xl font-bold text-white">
+          <div className="text-3xl font-bold text-text-primary">
             {topVideos[0]?.likes?.toLocaleString() || 0}
           </div>
-          <div className="text-xs text-[#8A8FA8] mt-1">likes</div>
+          <div className="text-xs text-text-muted mt-1">likes</div>
         </div>
 
-        <div className="bg-[#1c1e2a] border border-[#2E3045] rounded-xl p-5">
-          <div className="flex items-center gap-2 text-[#8A8FA8] mb-2">
+        <div className="bg-bg border border-border rounded-xl p-5">
+          <div className="flex items-center gap-2 text-text-muted mb-2">
             <Eye size={18} />
             <span className="text-sm font-medium">最高播放</span>
           </div>
-          <div className="text-3xl font-bold text-white">
+          <div className="text-3xl font-bold text-text-primary">
             {topVideos[0]?.views?.toLocaleString() || 0}
           </div>
-          <div className="text-xs text-[#8A8FA8] mt-1">views</div>
+          <div className="text-xs text-text-muted mt-1">views</div>
         </div>
 
-        <div className="bg-[#1c1e2a] border border-[#2E3045] rounded-xl p-5">
-          <div className="flex items-center gap-2 text-[#8A8FA8] mb-2">
+        <div className="bg-bg border border-border rounded-xl p-5">
+          <div className="flex items-center gap-2 text-text-muted mb-2">
             <BarChart3 size={18} />
             <span className="text-sm font-medium">竞品分布</span>
           </div>
-          <div className="text-3xl font-bold text-white">
+          <div className="text-3xl font-bold text-text-primary">
             {Object.keys(byApp).length}
           </div>
-          <div className="text-xs text-[#8A8FA8] mt-1">个 App 有爆款</div>
+          <div className="text-xs text-text-muted mt-1">个 App 有爆款</div>
         </div>
       </div>
 
       {/* 竞品分布 */}
-      <div className="bg-[#1c1e2a] border border-[#2E3045] rounded-xl p-5">
-        <h3 className="text-sm font-medium text-[#C8CBE0] mb-4">竞品爆款分布</h3>
+      <div className="bg-bg border border-border rounded-xl p-5">
+        <h3 className="text-sm font-medium text-text-secondary mb-4">竞品爆款分布</h3>
         <div className="flex gap-4">
           {Object.entries(byApp).map(([app, count]) => (
             <div key={app} className="flex items-center gap-2">
               <AppBadge app={app} />
-              <span className="text-white font-medium">{count}</span>
-              <span className="text-[#8A8FA8] text-sm">个爆款</span>
+              <span className="text-text-primary font-medium">{count}</span>
+              <span className="text-text-muted text-sm">个爆款</span>
             </div>
           ))}
           {Object.keys(byApp).length === 0 && (
-            <p className="text-[#8A8FA8] text-sm">本周暂无爆款数据</p>
+            <p className="text-text-muted text-sm">本周暂无爆款数据</p>
           )}
         </div>
       </div>
 
       {/* Top 视频列表 */}
-      <div className="bg-[#1c1e2a] border border-[#2E3045] rounded-xl p-5">
-        <h3 className="text-sm font-medium text-[#C8CBE0] mb-4">爆款视频 TOP 10</h3>
+      <div className="bg-bg border border-border rounded-xl p-5">
+        <h3 className="text-sm font-medium text-text-secondary mb-4">爆款视频 TOP 10</h3>
         {topVideos.length === 0 ? (
-          <p className="text-[#8A8FA8] text-sm py-8 text-center">本周暂无爆款数据</p>
+          <p className="text-text-muted text-sm py-8 text-center">本周暂无爆款数据</p>
         ) : (
           <div className="space-y-3">
             {topVideos.map((video, idx) => (
@@ -128,9 +128,9 @@ export default function WeeklyReport() {
                 href={video.tiktokUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-4 p-3 rounded-lg bg-[#12141c] hover:bg-[#1c1e2a] transition-colors group"
+                className="flex items-center gap-4 p-3 rounded-lg bg-bg hover:bg-bg transition-colors group"
               >
-                <span className="text-2xl font-bold text-[#8A8FA8] w-8">{idx + 1}</span>
+                <span className="text-2xl font-bold text-text-muted w-8">{idx + 1}</span>
                 <img
                   src={video.thumbnailUrl || videoThumbnailFallback(video.title)}
                   alt=""
@@ -138,10 +138,10 @@ export default function WeeklyReport() {
                   onError={e => { e.currentTarget.src = videoThumbnailFallback(video.title) }}
                 />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[#C8CBE0] line-clamp-2 leading-tight">
+                  <p className="text-sm text-text-secondary line-clamp-2 leading-tight">
                     {video.title}
                   </p>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-[#8A8FA8]">
+                  <div className="flex items-center gap-4 mt-2 text-xs text-text-muted">
                     <span className="flex items-center gap-1">
                       <Heart size={12} className="text-rose-400" />
                       {video.likes?.toLocaleString()}
@@ -157,7 +157,7 @@ export default function WeeklyReport() {
                     <AppBadge app={video.app} />
                   </div>
                 </div>
-                <ExternalLink size={16} className="text-[#8A8FA8] group-hover:text-white transition-colors" />
+                <ExternalLink size={16} className="text-text-muted group-hover:text-text-primary transition-colors" />
               </a>
             ))}
           </div>

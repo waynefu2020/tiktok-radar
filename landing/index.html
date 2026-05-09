@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TikTok Radar — App 出海内容情报平台</title>
+  <meta name="description" content="一句话追踪 TikTok 爆款内容。UGC 视频监控 · 趋势分析 · 创作者数据库 · AI 脚本拆解 · 自动周报，全流程内容情报自动化。" />
+  <meta property="og:title" content="TikTok Radar — App 出海内容情报平台" />
+  <meta property="og:description" content="一句话追踪 TikTok 爆款内容，全流程内容情报自动化。" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: radial-gradient(ellipse at 75% 20%, #0d1a2e 0%, transparent 55%),
+                  radial-gradient(ellipse at 15% 85%, #080a2a 0%, transparent 50%),
+                  #060C18;
+      color: white;
+      overflow-x: hidden;
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      opacity: 0.025;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+      pointer-events: none;
+    }
+
+    .mono { font-family: 'JetBrains Mono', 'Courier New', monospace; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .animate-fade-in { animation: fadeIn 0.5s ease forwards; }
+    .animate-fade-in-delay-1 { animation: fadeIn 0.5s 0.1s ease both; }
+    .animate-fade-in-delay-2 { animation: fadeIn 0.5s 0.2s ease both; }
+    .animate-fade-in-delay-3 { animation: fadeIn 0.5s 0.3s ease both; }
+    .pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
+
+    .card {
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.03);
+      transition: all 0.3s ease;
+    }
+    .card:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(59,130,246,0.3);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.2);
+      border-radius: 999px;
+      padding: 6px 16px;
+    }
+
+    .btn-primary {
+      background: #3B82F6;
+      color: white;
+      font-weight: 600;
+      padding: 12px 32px;
+      border-radius: 999px;
+      transition: background 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-primary:hover { background: #60A5FA; }
+
+    .btn-ghost {
+      border: 1px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.8);
+      font-weight: 600;
+      padding: 12px 32px;
+      border-radius: 999px;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-ghost:hover {
+      border-color: rgba(255,255,255,0.4);
+      color: white;
+    }
+
+    .terminal {
+      background: #0d1424;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+
+    .terminal-bar {
+      background: #111928;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+
+    .step-connector {
+      position: absolute;
+      right: -10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(255,255,255,0.15);
+      font-size: 18px;
+      z-index: 10;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      background: rgba(6,12,24,0.8);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #60A5FA, #34D399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-bar {
+      border-top: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .faq-item {
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.02);
+      padding: 24px;
+      transition: all 0.2s;
+    }
+    .faq-item:hover {
+      background: rgba(255,255,255,0.04);
+    }
+
+    .icon-box {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .video-row {
+      display: grid;
+      grid-template-columns: 48px 1fr 80px 80px 80px 120px;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    .video-row:hover { background: rgba(255,255,255,0.02); }
+
+    @media (max-width: 768px) {
+      .video-row { grid-template-columns: 1fr 80px 60px; }
+      .video-row .hide-mobile { display: none; }
+    }
+  </style>
+</head>
+<body class="antialiased">
+
+  <div class="noise"></div>
+
+  <!-- NAV -->
+  <nav>
+    <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 py-5 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-lg bg-rose-500 flex items-center justify-center text-sm">📡</div>
+        <span class="text-sm font-semibold text-white">TikTok Radar</span>
+      </div>
+      <div class="hidden md:flex items-center gap-8 text-sm" style="color:rgba(255,255,255,0.5)">
+        <a href="#features" class="hover:text-white transition-colors">核心功能</a>
+        <a href="#workflow" class="hover:text-white transition-colors">工作流程</a>
+        <a href="#quickstart" class="hover:text-white transition-colors">快速开始</a>
+        <a href="https://github.com/waynefu2020" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a>
+        <a href="https://www.xiaohongshu.com/user/profile/6391a19d000000001f0180f2" target="_blank" rel="noopener" class="hover:text-white transition-colors">作者小红书</a>
+      </div>
+      <a href="#quickstart" class="btn-primary text-sm" style="padding:8px 20px">免费部署</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="relative z-10 pt-20 pb-24 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;" class="lg-grid">
+      <div class="animate-fade-in">
+        <div class="badge mb-8">
+          <span class="pulse-slow" style="width:6px;height:6px;border-radius:50%;background:#34D399;display:inline-block;"></span>
+          <span style="color:#34D399;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">TikTok API · AI 内容情报</span>
+        </div>
+        <h1 style="font-size:clamp(40px,5vw,60px);font-weight:900;line-height:1.05;letter-spacing:-0.02em;margin-bottom:24px;">
+          <span style="display:block;color:white;">监控 TikTok</span>
+          <span class="gradient-text" style="display:block;">竞品博主内容</span>
+        </h1>
+        <p style="color:#94A3B8;font-size:18px;line-height:1.7;max-width:420px;margin-bottom:40px;">
+          不用手动刷 TikTok，告诉系统你关注哪些 App，它自动帮你找爆款、拆脚本、评分创作者、生成周报。
+        </p>
+        <div class="flex flex-wrap gap-3 mb-10">
+          <a href="#quickstart" class="btn-primary">开始部署</a>
+          <a href="https://github.com/waynefu2020" target="_blank" rel="noopener" class="btn-ghost">查看 GitHub</a>
+        </div>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2" style="font-size:12px;color:#64748B;">
+          <span>支持接入：</span>
+          <span style="color:#94A3B8;">TikHub API</span>
+          <span style="color:#94A3B8;">OpenAI Whisper</span>
+          <span style="color:#94A3B8;">Claude AI</span>
+        </div>
+      </div>
+
+      <!-- Terminal Mockup -->
+      <div class="relative animate-fade-in-delay-2" style="display:none;" id="hero-terminal">
+        <div style="position:absolute;inset:-32px;background:rgba(59,130,246,0.06);border-radius:24px;filter:blur(48px);"></div>
+        <div class="terminal relative">
+          <div class="terminal-bar">
+            <div class="dot" style="background:#FF5F57;"></div>
+            <div class="dot" style="background:#FFBD2E;"></div>
+            <div class="dot" style="background:#28C840;"></div>
+            <span class="mono ml-3" style="font-size:11px;color:rgba(255,255,255,0.25);">radar — dashboard</span>
+          </div>
+          <div style="padding:20px;font-family:'JetBrains Mono',monospace;font-size:12px;space-y:12px;">
+            <div style="margin-bottom:12px;">
+              <div style="display:flex;gap:8px;">
+                <span style="color:#60A5FA;">▶</span>
+                <span style="color:rgba(255,255,255,0.8);">sync --app coconote --days 7</span>
+              </div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <div style="padding-left:16px;color:#64748B;font-size:11px;">
+                <span style="color:#34D399;">✓</span> 同步 Coconote · 抓取最新 UGC 视频...
+              </div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <div style="padding-left:16px;color:#64748B;font-size:11px;">
+                <span style="color:#34D399;">✓</span> 发现 <span style="color:white;font-weight:700;">23</span> 条新视频 · 其中爆款 <span style="color:#F59E0B;font-weight:700;">4</span> 条
+              </div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <div style="padding-left:16px;color:#64748B;font-size:11px;">
+                <span style="color:#34D399;">✓</span> AI 脚本拆解完成 · 钩子词命中率 <span style="color:#60A5FA;">87%</span>
+              </div>
+            </div>
+            <div style="margin-bottom:4px;">
+              <div style="display:flex;gap:8px;">
+                <span style="color:#60A5FA;">▶</span>
+                <span style="color:rgba(255,255,255,0.8);">report --week 2026-W19</span>
+              </div>
+            </div>
+            <div style="padding-left:16px;color:#64748B;font-size:11px;">
+              <span style="color:#34D399;">✓</span> 周报已生成 · 导出 CSV ✅
+            </div>
+          </div>
+          <!-- Floating badges -->
+          <div style="position:absolute;top:-12px;right:-12px;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.3);color:#F87171;font-size:11px;font-weight:700;padding:6px 12px;border-radius:999px;backdrop-filter:blur(8px);font-family:'JetBrains Mono',monospace;">
+            🔥 爆款 × 4
+          </div>
+          <div style="position:absolute;bottom:-12px;left:-12px;background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.3);color:#60A5FA;font-size:11px;font-weight:700;padding:6px 12px;border-radius:999px;backdrop-filter:blur(8px);font-family:'JetBrains Mono',monospace;">
+            创作者 47 位
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard preview (full width) -->
+    <div class="relative mt-16 animate-fade-in-delay-3">
+      <div style="position:absolute;inset:-16px;background:rgba(59,130,246,0.04);border-radius:24px;filter:blur(32px);"></div>
+      <div class="terminal relative" style="max-height:320px;overflow:hidden;">
+        <div class="terminal-bar">
+          <div class="dot" style="background:#FF5F57;"></div>
+          <div class="dot" style="background:#FFBD2E;"></div>
+          <div class="dot" style="background:#28C840;"></div>
+          <span class="mono ml-3" style="font-size:11px;color:rgba(255,255,255,0.25);">UGC 视频中心 — 最近7天</span>
+          <span style="margin-left:auto;font-size:10px;color:rgba(59,130,246,0.8);background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:4px;padding:2px 8px;font-family:'JetBrains Mono',monospace;">23 条视频</span>
+        </div>
+        <!-- Stats row -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid rgba(255,255,255,0.04);">
+          <div style="padding:16px;border-right:1px solid rgba(255,255,255,0.04);text-align:center;">
+            <div style="font-size:22px;font-weight:900;color:white;">2.4M</div>
+            <div style="font-size:10px;color:#64748B;margin-top:2px;">总播放量</div>
+          </div>
+          <div style="padding:16px;border-right:1px solid rgba(255,255,255,0.04);text-align:center;">
+            <div style="font-size:22px;font-weight:900;color:#60A5FA;">89.3K</div>
+            <div style="font-size:10px;color:#64748B;margin-top:2px;">总点赞</div>
+          </div>
+          <div style="padding:16px;border-right:1px solid rgba(255,255,255,0.04);text-align:center;">
+            <div style="font-size:22px;font-weight:900;color:#34D399;">4</div>
+            <div style="font-size:10px;color:#64748B;margin-top:2px;">🔥 爆款视频</div>
+          </div>
+          <div style="padding:16px;text-align:center;">
+            <div style="font-size:22px;font-weight:900;color:#F59E0B;">47</div>
+            <div style="font-size:10px;color:#64748B;margin-top:2px;">活跃创作者</div>
+          </div>
+        </div>
+        <!-- Video list -->
+        <div style="padding:0;">
+          <div style="display:grid;grid-template-columns:32px 1fr 90px 72px 72px 96px;gap:8px;padding:8px 16px;font-size:10px;color:#475569;font-family:'JetBrains Mono',monospace;letter-spacing:0.05em;border-bottom:1px solid rgba(255,255,255,0.04);">
+            <span></span><span>CREATOR / TITLE</span><span>PLAYS</span><span>LIKES</span><span>SCORE</span><span>APP</span>
+          </div>
+          <!-- Row 1 -->
+          <div style="display:grid;grid-template-columns:32px 1fr 90px 72px 72px 96px;gap:8px;padding:10px 16px;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.03);align-items:center;">
+            <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#F59E0B,#EF4444);"></div>
+            <div>
+              <div style="color:white;font-weight:600;font-size:12px;">@techreview_daily</div>
+              <div style="color:#475569;font-size:10px;font-family:'JetBrains Mono',monospace;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">This AI note app changed my life completely...</div>
+            </div>
+            <div style="color:#94A3B8;font-family:'JetBrains Mono',monospace;font-size:11px;">1.2M</div>
+            <div style="color:#94A3B8;font-family:'JetBrains Mono',monospace;font-size:11px;">43.1K</div>
+            <div>
+              <span style="background:rgba(239,68,68,0.15);color:#F87171;border:1px solid rgba(239,68,68,0.3);border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;">🔥 94</span>
+            </div>
+            <div style="font-size:10px;color:#A78BFA;font-family:'JetBrains Mono',monospace;">Coconote</div>
+          </div>
+          <!-- Row 2 -->
+          <div style="display:grid;grid-template-columns:32px 1fr 90px 72px 72px 96px;gap:8px;padding:10px 16px;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.03);align-items:center;">
+            <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#8B5CF6,#3B82F6);"></div>
+            <div>
+              <div style="color:white;font-weight:600;font-size:12px;">@productivity_hacks</div>
+              <div style="color:#475569;font-size:10px;font-family:'JetBrains Mono',monospace;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">Best study apps for 2026 you NEED to try</div>
+            </div>
+            <div style="color:#94A3B8;font-family:'JetBrains Mono',monospace;font-size:11px;">680K</div>
+            <div style="color:#94A3B8;font-family:'JetBrains Mono',monospace;font-size:11px;">22.4K</div>
+            <div>
+              <span style="background:rgba(239,68,68,0.15);color:#F87171;border:1px solid rgba(239,68,68,0.3);border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;">🔥 87</span>
+            </div>
+            <div style="font-size:10px;color:#34D399;font-family:'JetBrains Mono',monospace;">Studley</div>
+          </div>
+          <!-- Row 3 -->
+          <div style="display:grid;grid-template-columns:32px 1fr 90px 72px 72px 96px;gap:8px;padding:10px 16px;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.03);align-items:center;opacity:0.6;">
+            <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#10B981,#06B6D4);"></div>
+            <div>
+              <div style="color:white;font-weight:600;font-size:12px;">@morning_routine_coach</div>
+              <div style="color:#475569;font-size:10px;font-family:'JetBrains Mono',monospace;">How I take notes with AI in 2026</div>
+            </div>
+            <div style="color:#94A3B8;font-family:'JetBrains Mono',monospace;font-size:11px;">340K</div>
+            <div style="color:#94A3B8;font-family:'JetBrains Mono',monospace;font-size:11px;">11.2K</div>
+            <div>
+              <span style="background:rgba(59,130,246,0.15);color:#60A5FA;border:1px solid rgba(59,130,246,0.3);border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;">72</span>
+            </div>
+            <div style="font-size:10px;color:#60A5FA;font-family:'JetBrains Mono',monospace;">Turbo AI</div>
+          </div>
+        </div>
+        <!-- Fade out -->
+        <div style="position:absolute;bottom:0;left:0;right:0;height:80px;background:linear-gradient(to top, #060C18, transparent);"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS BAR -->
+  <div class="relative z-10 stat-bar">
+    <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 py-6" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;">
+      <div style="display:flex;flex-direction:column;align-items:center;padding:0 16px;gap:4px;border-right:1px solid rgba(255,255,255,0.06);">
+        <span style="font-size:24px;font-weight:900;color:white;">3+</span>
+        <span style="font-size:11px;color:#64748B;text-align:center;">App 同时监控</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;padding:0 16px;gap:4px;border-right:1px solid rgba(255,255,255,0.06);">
+        <span style="font-size:24px;font-weight:900;color:white;">7×24</span>
+        <span style="font-size:11px;color:#64748B;text-align:center;">自动同步</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;padding:0 16px;gap:4px;border-right:1px solid rgba(255,255,255,0.06);">
+        <span style="font-size:24px;font-weight:900;color:white;">AI</span>
+        <span style="font-size:11px;color:#64748B;text-align:center;">脚本拆解分析</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;padding:0 16px;gap:4px;">
+        <span style="font-size:24px;font-weight:900;color:white;">周报</span>
+        <span style="font-size:11px;color:#64748B;text-align:center;">周报自动生成</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- WORKFLOW -->
+  <section id="workflow" class="relative z-10 py-24 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto">
+    <div style="text-align:center;margin-bottom:56px;">
+      <p style="color:#22D3EE;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:12px;">FIVE-PHASE WORKFLOW</p>
+      <h2 style="font-size:clamp(28px,4vw,40px);font-weight:900;color:white;">五步完成内容情报全流程</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;position:relative;">
+      <!-- Step 1 -->
+      <div class="card" style="padding:24px;position:relative;">
+        <div class="step-connector">›</div>
+        <div class="icon-box" style="background:#F59E0B;margin-bottom:16px;">🎯</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <span style="font-size:10px;font-weight:900;color:#3B82F6;font-family:'JetBrains Mono',monospace;">01</span>
+          <span style="font-size:10px;color:#64748B;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;">App Setup</span>
+        </div>
+        <h3 style="font-size:14px;font-weight:700;color:white;margin-bottom:8px;">配置 App</h3>
+        <p style="font-size:12px;color:#64748B;line-height:1.6;">输入你要监控的 TikTok 话题标签或关键词，系统自动识别对应的 App 和创作者范围。</p>
+      </div>
+      <!-- Step 2 -->
+      <div class="card" style="padding:24px;position:relative;">
+        <div class="step-connector">›</div>
+        <div class="icon-box" style="background:#3B82F6;margin-bottom:16px;">⚡</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <span style="font-size:10px;font-weight:900;color:#3B82F6;font-family:'JetBrains Mono',monospace;">02</span>
+          <span style="font-size:10px;color:#64748B;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;">Auto Sync</span>
+        </div>
+        <h3 style="font-size:14px;font-weight:700;color:white;margin-bottom:8px;">自动采集</h3>
+        <p style="font-size:12px;color:#64748B;line-height:1.6;">通过 TikHub API 批量抓取视频，自动去重、提取创作者信息，支持增量同步。</p>
+      </div>
+      <!-- Step 3 -->
+      <div class="card" style="padding:24px;position:relative;">
+        <div class="step-connector">›</div>
+        <div class="icon-box" style="background:#8B5CF6;margin-bottom:16px;">🤖</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <span style="font-size:10px;font-weight:900;color:#3B82F6;font-family:'JetBrains Mono',monospace;">03</span>
+          <span style="font-size:10px;color:#64748B;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;">AI Analysis</span>
+        </div>
+        <h3 style="font-size:14px;font-weight:700;color:white;margin-bottom:8px;">AI 拆解脚本</h3>
+        <p style="font-size:12px;color:#64748B;line-height:1.6;">AI 自动提取视频字幕，拆解钩子、产品展示、CTA 结构，输出可复用的脚本模板。</p>
+      </div>
+      <!-- Step 4 -->
+      <div class="card" style="padding:24px;position:relative;">
+        <div class="step-connector">›</div>
+        <div class="icon-box" style="background:#10B981;margin-bottom:16px;">⭐</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <span style="font-size:10px;font-weight:900;color:#3B82F6;font-family:'JetBrains Mono',monospace;">04</span>
+          <span style="font-size:10px;color:#64748B;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;">Scoring</span>
+        </div>
+        <h3 style="font-size:14px;font-weight:700;color:white;margin-bottom:8px;">爆款评分</h3>
+        <p style="font-size:12px;color:#64748B;line-height:1.6;">综合播放量、互动率、创作者粉丝体量，自动计算爆款潜力评分，优先标注高价值视频。</p>
+      </div>
+      <!-- Step 5 -->
+      <div class="card" style="padding:24px;">
+        <div class="icon-box" style="background:#EF4444;margin-bottom:16px;">📊</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <span style="font-size:10px;font-weight:900;color:#3B82F6;font-family:'JetBrains Mono',monospace;">05</span>
+          <span style="font-size:10px;color:#64748B;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;">Weekly Report</span>
+        </div>
+        <h3 style="font-size:14px;font-weight:700;color:white;margin-bottom:8px;">自动周报</h3>
+        <p style="font-size:12px;color:#64748B;line-height:1.6;">每周自动汇总各 App 数据趋势，生成结构化周报，团队共享查看。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features" class="relative z-10 py-24 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto" style="border-top:1px solid rgba(255,255,255,0.06);">
+    <div style="text-align:center;margin-bottom:56px;">
+      <p style="color:#22D3EE;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:12px;">Core Capabilities</p>
+      <h2 style="font-size:clamp(28px,4vw,40px);font-weight:900;color:white;">每个细节都为出海营销效率而设计</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+
+      <div class="card" style="padding:24px;">
+        <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;">
+          <div class="icon-box" style="background:#EF4444;">📡</div>
+          <div>
+            <span style="font-size:10px;font-weight:700;color:rgba(34,211,238,0.7);letter-spacing:0.08em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">MONITOR</span>
+            <h3 style="font-size:14px;font-weight:700;color:white;margin-top:4px;">UGC 视频中心</h3>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#64748B;line-height:1.7;">实时监控多个 App 的 TikTok UGC 内容，按时间、互动数、爆款分数多维筛选，一屏掌握所有竞品动态。</p>
+      </div>
+
+      <div class="card" style="padding:24px;">
+        <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;">
+          <div class="icon-box" style="background:#F59E0B;">📈</div>
+          <div>
+            <span style="font-size:10px;font-weight:700;color:rgba(34,211,238,0.7);letter-spacing:0.08em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">TREND</span>
+            <h3 style="font-size:14px;font-weight:700;color:white;margin-top:4px;">趋势分析</h3>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#64748B;line-height:1.7;">可视化展示各 App 内容趋势走向，识别爆量时间窗口和高频标签词，用数据指导发布策略。</p>
+      </div>
+
+      <div class="card" style="padding:24px;">
+        <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;">
+          <div class="icon-box" style="background:#8B5CF6;">👥</div>
+          <div>
+            <span style="font-size:10px;font-weight:700;color:rgba(34,211,238,0.7);letter-spacing:0.08em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">CREATORS</span>
+            <h3 style="font-size:14px;font-weight:700;color:white;margin-top:4px;">创作者数据库</h3>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#64748B;line-height:1.7;">自动建立创作者档案，记录粉丝量、互动率、历史合作数据，快速识别潜力 KOL，支持一键导出。</p>
+      </div>
+
+      <div class="card" style="padding:24px;">
+        <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;">
+          <div class="icon-box" style="background:#3B82F6;">🤖</div>
+          <div>
+            <span style="font-size:10px;font-weight:700;color:rgba(34,211,238,0.7);letter-spacing:0.08em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">AI SCRIPT</span>
+            <h3 style="font-size:14px;font-weight:700;color:white;margin-top:4px;">AI 脚本拆解</h3>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#64748B;line-height:1.7;">基于 Whisper 语音转写 + Claude AI 分析，拆解爆款视频的钩子公式、产品植入节点、行动号召话术。</p>
+      </div>
+
+      <div class="card" style="padding:24px;">
+        <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;">
+          <div class="icon-box" style="background:#10B981;">📋</div>
+          <div>
+            <span style="font-size:10px;font-weight:700;color:rgba(34,211,238,0.7);letter-spacing:0.08em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">WEEKLY</span>
+            <h3 style="font-size:14px;font-weight:700;color:white;margin-top:4px;">自动周报生成</h3>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#64748B;line-height:1.7;">每周自动汇总爆款率、播放增长、创作者活跃度等核心指标，生成结构化周报供团队复盘。</p>
+      </div>
+
+      <div class="card" style="padding:24px;">
+        <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;">
+          <div class="icon-box" style="background:#06B6D4;">🏠</div>
+          <div>
+            <span style="font-size:10px;font-weight:700;color:rgba(34,211,238,0.7);letter-spacing:0.08em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">SELF-HOST</span>
+            <h3 style="font-size:14px;font-weight:700;color:white;margin-top:4px;">完全自托管</h3>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#64748B;line-height:1.7;">数据存储在自己服务器，支持多用户权限管理，无订阅费、无数据泄露风险，按需扩展。</p>
+      </div>
+
+      <div class="card" style="padding:24px;">
+        <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;">
+          <div class="icon-box" style="background:#EC4899;">🔔</div>
+          <div>
+            <span style="font-size:10px;font-weight:700;color:rgba(34,211,238,0.7);letter-spacing:0.08em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">ALERT</span>
+            <h3 style="font-size:14px;font-weight:700;color:white;margin-top:4px;">爆款预警</h3>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#64748B;line-height:1.7;">设定播放量或互动率阈值，视频超标时实时推送预警，第一时间捕捉爆款内容趋势。</p>
+      </div>
+
+      <div class="card" style="padding:24px;">
+        <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;">
+          <div class="icon-box" style="background:#F97316;">📱</div>
+          <div>
+            <span style="font-size:10px;font-weight:700;color:rgba(34,211,238,0.7);letter-spacing:0.08em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">MULTI-APP</span>
+            <h3 style="font-size:14px;font-weight:700;color:white;margin-top:4px;">多 App 管理</h3>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#64748B;line-height:1.7;">同时追踪多款 App 的 TikTok 内容表现，横向对比各产品的 UGC 增长曲线，找到最快增长路径。</p>
+      </div>
+
+      <div class="card" style="padding:24px;">
+        <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;">
+          <div class="icon-box" style="background:#6366F1;">🔗</div>
+          <div>
+            <span style="font-size:10px;font-weight:700;color:rgba(34,211,238,0.7);letter-spacing:0.08em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">INTEGRATION</span>
+            <h3 style="font-size:14px;font-weight:700;color:white;margin-top:4px;">TikHub API 集成</h3>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#64748B;line-height:1.7;">原生集成 TikHub API，支持关键词搜索、话题视频采集、创作者主页抓取，自动识别接口响应结构。</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- QUICKSTART -->
+  <section id="quickstart" class="relative z-10 py-24 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto" style="border-top:1px solid rgba(255,255,255,0.06);">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:start;">
+      <div>
+        <p style="color:#22D3EE;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:12px;">Quick Start</p>
+        <h2 style="font-size:clamp(28px,3vw,36px);font-weight:900;color:white;margin-bottom:16px;">三步完成本地部署</h2>
+        <p style="color:#64748B;font-size:15px;line-height:1.7;margin-bottom:32px;">无需复杂配置，填好环境变量，5 分钟跑起来。</p>
+
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div style="display:flex;gap:16px;align-items:flex-start;">
+            <div style="width:28px;height:28px;border-radius:50%;background:#3B82F6;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">1</div>
+            <div>
+              <h4 style="color:white;font-weight:600;margin-bottom:8px;">克隆仓库 &amp; 安装依赖</h4>
+              <div style="background:#0d1424;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#94A3B8;">
+                git clone https://github.com/waynefu2020/tiktok-radar<br/>
+                cd tiktok-radar &amp;&amp; npm install
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:16px;align-items:flex-start;">
+            <div style="width:28px;height:28px;border-radius:50%;background:#3B82F6;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">2</div>
+            <div>
+              <h4 style="color:white;font-weight:600;margin-bottom:8px;">配置环境变量</h4>
+              <div style="background:#0d1424;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#94A3B8;">
+                cp .env.example .env<br/>
+                <span style="color:#64748B;"># 填入 TIKHUB_API_KEY, FEISHU_APP_ID 等</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:16px;align-items:flex-start;">
+            <div style="width:28px;height:28px;border-radius:50%;background:#10B981;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">3</div>
+            <div>
+              <h4 style="color:white;font-weight:600;margin-bottom:8px;">启动服务</h4>
+              <div style="background:#0d1424;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#94A3B8;">
+                npm run init-admin<br/>
+                npm run dev<br/>
+                <span style="color:#34D399;"># 访问 http://localhost:5173</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ENV vars reference -->
+      <div>
+        <h3 style="color:white;font-weight:700;margin-bottom:20px;font-size:15px;">所需环境变量</h3>
+        <div style="background:#0d1424;border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden;">
+          <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);background:#111928;">
+            <span class="mono" style="font-size:11px;color:rgba(255,255,255,0.3);">.env</span>
+          </div>
+          <div style="padding:20px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:2.2;">
+            <div><span style="color:#64748B;"># TikHub</span></div>
+            <div><span style="color:#A78BFA;">TIKHUB_API_KEY</span>=<span style="color:#34D399;">your_key</span></div>
+            <div style="margin-top:8px;"><span style="color:#64748B;"># AI 脚本分析</span></div>
+            <div><span style="color:#A78BFA;">OPENAI_API_KEY</span>=<span style="color:#34D399;">sk-xxx</span></div>
+            <div style="margin-top:8px;"><span style="color:#64748B;"># 认证</span></div>
+            <div><span style="color:#A78BFA;">JWT_SECRET</span>=<span style="color:#34D399;">your_jwt_secret</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="relative z-10 py-24 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto" style="border-top:1px solid rgba(255,255,255,0.06);">
+    <div style="text-align:center;margin-bottom:48px;">
+      <p style="color:#22D3EE;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:12px;">FAQ</p>
+      <h2 style="font-size:clamp(28px,4vw,40px);font-weight:900;color:white;">常见问题</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px;margin:0 auto;">
+      <div class="faq-item">
+        <h4 style="color:white;font-weight:700;margin-bottom:8px;font-size:14px;">需要 TikHub 账号吗？</h4>
+        <p style="color:#64748B;font-size:13px;line-height:1.7;">是的，需要注册 TikHub 并申请 API Key。TikHub 提供按量付费，日常监控成本通常在 $5–$20/月之间。</p>
+      </div>
+      <div class="faq-item">
+        <h4 style="color:white;font-weight:700;margin-bottom:8px;font-size:14px;">数据存在哪里？</h4>
+        <p style="color:#64748B;font-size:13px;line-height:1.7;">数据存储在你自己的服务器上（SQLite），完全私有，不依赖任何第三方云服务。</p>
+      </div>
+      <div class="faq-item">
+        <h4 style="color:white;font-weight:700;margin-bottom:8px;font-size:14px;">支持哪些 TikTok 内容类型？</h4>
+        <p style="color:#64748B;font-size:13px;line-height:1.7;">支持话题标签视频、关键词搜索视频、创作者主页视频。未来计划支持广告素材追踪。</p>
+      </div>
+      <div class="faq-item">
+        <h4 style="color:white;font-weight:700;margin-bottom:8px;font-size:14px;">AI 脚本拆解需要额外付费吗？</h4>
+        <p style="color:#64748B;font-size:13px;line-height:1.7;">需要配置 OpenAI API Key（用于 Whisper 转写）和 Claude API Key（用于脚本分析）。按实际用量计费。</p>
+      </div>
+      <div class="faq-item">
+        <h4 style="color:white;font-weight:700;margin-bottom:8px;font-size:14px;">可以监控竞品 App 吗？</h4>
+        <p style="color:#64748B;font-size:13px;line-height:1.7;">完全可以。在 App Manager 里添加竞品的 TikTok 话题标签，系统会自动抓取和分析对应 UGC 内容。</p>
+      </div>
+      <div class="faq-item">
+        <h4 style="color:white;font-weight:700;margin-bottom:8px;font-size:14px;">团队多人使用怎么配置？</h4>
+        <p style="color:#64748B;font-size:13px;line-height:1.7;">内置用户管理系统，支持管理员创建成员账号，分配不同权限。适合 2-10 人的营销小团队。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="relative z-10 py-24 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto" style="text-align:center;">
+    <div style="background:radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.12), transparent 70%);border:1px solid rgba(255,255,255,0.06);border-radius:24px;padding:64px 32px;">
+      <p style="color:#22D3EE;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:16px;">Open Source · Free Forever</p>
+      <h2 style="font-size:clamp(32px,5vw,52px);font-weight:900;color:white;margin-bottom:16px;">开始追踪你的<br/><span class="gradient-text">TikTok 内容情报</span></h2>
+      <p style="color:#64748B;font-size:16px;max-width:480px;margin:0 auto 40px;">完全开源，自托管部署，数据永远在你手里。</p>
+      <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">
+        <a href="https://github.com/waynefu2020/tiktok-radar" target="_blank" rel="noopener" class="btn-primary">⭐ GitHub 上 Star</a>
+        <a href="#quickstart" class="btn-ghost">查看部署文档</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="relative z-10 py-10 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto" style="border-top:1px solid rgba(255,255,255,0.06);">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:24px;height:24px;border-radius:8px;background:#EF4444;display:flex;align-items:center;justify-content:center;font-size:12px;">📡</div>
+        <span style="font-size:14px;font-weight:600;color:white;">TikTok Radar</span>
+      </div>
+      <p style="font-size:12px;color:#334155;text-align:center;max-width:400px;">
+        Built for App 出海营销团队 · Powered by TikHub API · MIT License
+      </p>
+      <div style="display:flex;gap:24px;font-size:12px;">
+        <a href="https://github.com/waynefu2020" target="_blank" rel="noopener" style="color:#475569;text-decoration:none;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#475569'">
+          GitHub
+        </a>
+        <a href="https://www.xiaohongshu.com/user/profile/6391a19d000000001f0180f2" target="_blank" rel="noopener" style="color:#475569;text-decoration:none;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#475569'">
+          作者小红书
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Show terminal on desktop
+    if (window.innerWidth >= 1024) {
+      document.getElementById('hero-terminal').style.display = 'block';
+    }
+
+    // Mobile: stack the hero grid
+    const style = document.createElement('style');
+    style.textContent = `
+      @media (max-width: 1023px) {
+        .lg-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+      }
+      @media (max-width: 767px) {
+        section > div[style*="grid-template-columns:repeat(3"] {
+          grid-template-columns: 1fr !important;
+        }
+        section > div[style*="grid-template-columns:repeat(5"] {
+          grid-template-columns: 1fr 1fr !important;
+        }
+        section > div[style*="grid-template-columns:1fr 1fr"] {
+          grid-template-columns: 1fr !important;
+        }
+        .stat-bar .max-w-7xl > div {
+          grid-template-columns: repeat(2,1fr) !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  </script>
+
+</body>
+</html>

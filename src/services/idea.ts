@@ -1,4 +1,15 @@
 import { Video, Creator } from '../types'
+import { authHeaders } from './auth'
+
+function apiFetch(url: string, init?: RequestInit) {
+  return fetch(url, {
+    ...init,
+    headers: {
+      ...authHeaders(),
+      ...(init?.headers || {}),
+    },
+  })
+}
 
 export interface IdeaCreator extends Creator {
   secUid?: string
@@ -18,14 +29,14 @@ export interface IdeaFetchResult {
 }
 
 export async function getIdeaCreators(): Promise<IdeaCreator[]> {
-  const res = await fetch('/api/idea-creators')
+  const res = await apiFetch('/api/idea-creators')
   if (!res.ok) throw new Error(`Load idea creators failed: HTTP ${res.status}`)
   const data = await res.json()
   return data.creators || []
 }
 
 export async function addIdeaCreator(username: string): Promise<{ creator: IdeaCreator; fetchResult: IdeaFetchResult }> {
-  const res = await fetch('/api/idea-creators', {
+  const res = await apiFetch('/api/idea-creators', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username }),
@@ -38,12 +49,12 @@ export async function addIdeaCreator(username: string): Promise<{ creator: IdeaC
 }
 
 export async function deleteIdeaCreator(username: string) {
-  const res = await fetch(`/api/idea-creators/${encodeURIComponent(username)}`, { method: 'DELETE' })
+  const res = await apiFetch(`/api/idea-creators/${encodeURIComponent(username)}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`Delete idea creator failed: HTTP ${res.status}`)
 }
 
 export async function refreshIdeaCreator(username: string): Promise<{ creator: IdeaCreator; fetchResult: IdeaFetchResult }> {
-  const res = await fetch(`/api/idea-creators/${encodeURIComponent(username)}/refresh`, { method: 'POST' })
+  const res = await apiFetch(`/api/idea-creators/${encodeURIComponent(username)}/refresh`, { method: 'POST' })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
     throw new Error(err.error || 'Refresh failed')
@@ -56,14 +67,14 @@ export async function getIdeaVideos(options?: { creator?: string; limit?: number
   if (options?.creator) params.set('creator', options.creator)
   if (options?.limit) params.set('limit', String(options.limit))
   const url = `/api/idea-videos${params.toString() ? '?' + params.toString() : ''}`
-  const res = await fetch(url)
+  const res = await apiFetch(url)
   if (!res.ok) throw new Error(`Load idea videos failed: HTTP ${res.status}`)
   const data = await res.json()
   return data.videos || []
 }
 
 export async function fetchIdeaVideos(): Promise<IdeaFetchResult> {
-  const res = await fetch('/api/idea-videos/fetch', { method: 'POST' })
+  const res = await apiFetch('/api/idea-videos/fetch', { method: 'POST' })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
     throw new Error(err.error || 'Fetch failed')
@@ -72,7 +83,7 @@ export async function fetchIdeaVideos(): Promise<IdeaFetchResult> {
 }
 
 export async function backfillIdeaVideos(): Promise<IdeaFetchResult> {
-  const res = await fetch('/api/idea-videos/backfill', { method: 'POST' })
+  const res = await apiFetch('/api/idea-videos/backfill', { method: 'POST' })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
     throw new Error(err.error || 'Backfill failed')

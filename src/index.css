@@ -3,9 +3,43 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg: #F3F4F8;
+    --bg-body: #FFFFFF;
+    --sidebar: #FFFFFF;
+    --sidebar-border: #E8EAF0;
+    --border: #E2E4EA;
+    --card: #FFFFFF;
+    --panel: #F5F6FA;
+    --input-bg: #F0F1F5;
+    --text-primary: #1A1D2D;
+    --text-secondary: #4A4F66;
+    --text-muted: #8A8FA8;
+    --accent: #6366F1;
+    --scrollbar-thumb: #C8CBE0;
+    --scrollbar-thumb-hover: #A0A4BC;
+  }
+
+  html.dark {
+    --bg: #0A0C10;
+    --bg-body: #0A0C10;
+    --sidebar: rgba(20, 22, 31, 0.95);
+    --sidebar-border: #2E3045;
+    --border: #2E3045;
+    --card: rgb(42, 45, 62);
+    --panel: rgb(28, 30, 42);
+    --input-bg: rgb(28, 30, 42);
+    --text-primary: #FFFFFF;
+    --text-secondary: #C8CBE0;
+    --text-muted: #8A8FA8;
+    --accent: #6366F1;
+    --scrollbar-thumb: #2E3045;
+    --scrollbar-thumb-hover: #3E4155;
+  }
+
   body {
-    background-color: #0A0C10;
-    color: #C8CBE0;
+    background-color: var(--bg);
+    color: var(--text-secondary);
     font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
@@ -18,35 +52,53 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #2E3045;
+    background: var(--scrollbar-thumb);
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #3E4155;
+    background: var(--scrollbar-thumb-hover);
   }
 }
 
 @layer components {
   .nav-item {
-    @apply flex items-center gap-3 px-4 py-2.5 rounded-[10px] text-sm font-medium text-[#8A8FA8] cursor-pointer transition-all duration-150 hover:bg-[rgba(99,102,241,0.08)] hover:text-[#C8CBE0];
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-[10px] text-sm font-medium cursor-pointer transition-all duration-150;
+    color: var(--text-muted);
+  }
+  .nav-item:hover {
+    background: rgba(99, 102, 241, 0.08);
+    color: var(--text-secondary);
   }
   .nav-item.active {
-    @apply bg-[rgba(99,102,241,0.12)] text-white;
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--text-primary);
   }
 
   .stat-card {
-    @apply rounded-xl border border-[#2E3045] bg-[rgb(18,20,28)] p-5 flex flex-col gap-2;
+    @apply rounded-xl p-5 flex flex-col gap-2;
+    background: var(--panel);
+    border: 1px solid var(--border);
   }
 
   .filter-btn {
-    @apply px-3 py-1.5 rounded-lg text-xs font-medium border border-[#2E3045] text-[#8A8FA8] cursor-pointer transition-all duration-150 hover:border-[#6366F1]/40 hover:text-[#C8CBE0];
+    @apply px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all duration-150;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .filter-btn:hover {
+    border-color: rgba(99, 102, 241, 0.4);
+    color: var(--text-secondary);
   }
   .filter-btn.active {
-    @apply border-[#6366F1]/50 bg-[rgba(99,102,241,0.1)] text-white;
+    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--text-primary);
   }
 
   .tag-badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded text-xs bg-[rgb(42,45,62)] text-[#8A8FA8];
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs;
+    background: var(--panel);
+    color: var(--text-muted);
   }
 
   .gradient-bg {
@@ -54,10 +106,15 @@
   }
 
   .table-row {
-    @apply border-b border-[#2E3045]/60 hover:bg-[rgb(18,20,28)] transition-colors duration-100;
+    @apply transition-colors duration-100;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  }
+  .table-row:hover {
+    background: var(--panel);
   }
 
   .metric-val {
-    @apply text-sm font-medium text-[#C8CBE0] tabular-nums;
+    @apply text-sm font-medium tabular-nums;
+    color: var(--text-secondary);
   }
 }

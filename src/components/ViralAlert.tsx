@@ -120,18 +120,18 @@ export default function ViralAlert({ onViewDetails }: ViralAlertProps) {
       <div className="flex items-center justify-between bg-gradient-to-r from-rose-500/20 to-orange-500/20 border border-rose-500/30 rounded-xl px-4 py-3">
         <div className="flex items-center gap-2">
           {permission === 'granted' ? (
-            <Bell size={18} className="text-rose-400" />
+            <Bell size={18} className="text-rose-500" />
           ) : (
-            <BellOff size={18} className="text-rose-400" />
+            <BellOff size={18} className="text-rose-500" />
           )}
-          <span className="font-medium text-rose-200">
-            爆款提醒 {unreadCount > 0 && <span className="ml-1 px-1.5 py-0.5 bg-rose-500 rounded-full text-xs">{unreadCount}</span>}
+          <span className="font-medium text-rose-600 dark:text-rose-200">
+            爆款提醒 {unreadCount > 0 && <span className="ml-1 px-1.5 py-0.5 bg-rose-500 rounded-full text-xs text-white">{unreadCount}</span>}
           </span>
         </div>
         {permission !== 'granted' && (
           <button
             onClick={requestPermission}
-            className="text-xs text-rose-300 hover:text-rose-200 underline"
+            className="text-xs text-rose-500 hover:text-rose-600 dark:text-rose-300 dark:hover:text-rose-200 underline"
           >
             开启通知
           </button>
@@ -142,9 +142,10 @@ export default function ViralAlert({ onViewDetails }: ViralAlertProps) {
       {notifications.map(({ video, read }) => (
         <div
           key={video.id}
-          className={`bg-[#1c1e2a] border border-[#2E3045] rounded-xl overflow-hidden shadow-xl transition-all ${
+          className={`rounded-xl overflow-hidden shadow-xl transition-all ${
             read ? 'opacity-60' : 'border-rose-500/30'
           }`}
+          style={{ background: 'var(--card)', border: `1px solid var(--border)${read ? '' : ''}` }}
           onClick={() => markAsRead(video.id)}
         >
           <div className="flex gap-3 p-3">
@@ -155,30 +156,32 @@ export default function ViralAlert({ onViewDetails }: ViralAlertProps) {
               onError={e => { e.currentTarget.src = '/thumbnails/fallback.svg' }}
             />
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-[#C8CBE0] line-clamp-2 leading-tight">
+              <p className="text-sm line-clamp-2 leading-tight" style={{ color: 'var(--text-secondary)' }}>
                 {video.title}
               </p>
-              <div className="flex items-center gap-3 mt-1.5 text-xs text-[#8A8FA8]">
-                <span className="text-rose-400 font-medium">
+              <div className="flex items-center gap-3 mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                <span className="text-rose-500 font-medium">
                   ❤️ {video.likes.toLocaleString()}
                 </span>
                 <span>👁 {video.views?.toLocaleString() || 0}</span>
-                <span className="px-1.5 py-0.5 bg-[#2E3045] rounded text-[10px]">
+                <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'var(--panel)' }}>
                   {video.app}
                 </span>
               </div>
             </div>
             <button
               onClick={e => { e.stopPropagation(); dismiss(video.id) }}
-              className="text-[#8A8FA8] hover:text-white p-1"
+              className="p-1 transition-colors"
+              style={{ color: 'var(--text-muted)' }}
             >
               <X size={14} />
             </button>
           </div>
-          <div className="flex border-t border-[#2E3045]">
+          <div className="flex" style={{ borderTop: '1px solid var(--border)' }}>
             <button
               onClick={() => { markAsRead(video.id); onViewDetails?.(video) }}
-              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-[#8A8FA8] hover:text-white hover:bg-[#2E3045]/50 transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs transition-colors"
+              style={{ color: 'var(--text-muted)' }}
             >
               <ExternalLink size={12} />
               查看详情
