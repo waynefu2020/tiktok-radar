@@ -553,6 +553,27 @@ async function downloadThumbnail(videoId, thumbnailUrl) {
   }
 }
 
+async function downloadAvatar(username, avatarUrl) {
+  if (!avatarUrl || !avatarUrl.startsWith('http')) return avatarUrl
+
+  const safeName = String(username).replace(/[^a-zA-Z0-9_-]/g, '_')
+  const ext = avatarUrl.match(/\.([^.?]+)(?:\?|$)/)?.[1] || 'jpg'
+  const localPath = path.join(AVATARS_DIR, `${safeName}.${ext}`)
+  const publicPath = `/avatars/${path.basename(localPath)}`
+
+  if (fs.existsSync(localPath)) return publicPath
+
+  try {
+    const resp = await axios.get(avatarUrl, { responseType: 'arraybuffer', timeout: 15000 })
+    fs.writeFileSync(localPath, resp.data)
+    console.log(`[Avatar] Downloaded: ${publicPath}`)
+    return publicPath
+  } catch (err) {
+    console.warn(`[Avatar] Failed to download ${username}:`, err.message)
+    return avatarUrl
+  }
+}
+
 async function downloadVideoFromUrl(sourceUrl, targetPath) {
   const response = await axios.get(sourceUrl, {
     responseType: 'stream',
@@ -918,6 +939,7 @@ app.post('/api/monitored-creators', async (req, res) => {
     })
     const creator = normalizeCreatorProfile(resp.data, apps)
     if (!creator) return res.status(404).json({ error: `Creator not found: ${username}` })
+    creator.avatarUrl = await downloadAvatar(creator.username, creator.avatarUrl)
     res.json({ creator: saveMonitoredCreator(creator, apps) })
   } catch (err) {
     const detail = err.response?.data?.detail || err.response?.data?.message || err.message
@@ -1160,6 +1182,7 @@ app.post('/api/idea-creators', async (req, res) => {
       params: { unique_id: username },
     })
     const creator = normalizeIdeaCreatorProfile(resp.data, username)
+    creator.avatarUrl = await downloadAvatar(creator.username, creator.avatarUrl)
     const saved = saveIdeaCreator(creator)
     const fetchResult = await syncIdeaVideosForCreators([saved])
     res.json({ creator: saved, fetchResult })
@@ -1188,6 +1211,7 @@ app.post('/api/idea-creators/:username/refresh', async (req, res) => {
       params: { unique_id: username },
     })
     const creator = normalizeIdeaCreatorProfile(resp.data, username)
+    creator.avatarUrl = await downloadAvatar(creator.username, creator.avatarUrl)
     const saved = saveIdeaCreator(creator)
     const fetchResult = await syncIdeaVideosForCreators([saved])
     res.json({ creator: saved, fetchResult })
@@ -1242,6 +1266,9 @@ app.post('/api/idea-videos/fetch', async (_req, res) => {
 
 // Serve thumbnail files
 app.use('/thumbnails', express.static(THUMBNAILS_DIR))
+
+// Serve avatar files
+app.use('/avatars', express.static(AVATARS_DIR))
 
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, 'dist')))
